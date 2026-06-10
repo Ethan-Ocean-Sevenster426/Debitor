@@ -99,25 +99,36 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'mssql',
-        'NAME': os.environ.get('DB_NAME', 'FSA_Debtors'),
-        'HOST': os.environ.get('DB_SERVER', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', ''),
-        'USER': os.environ.get('DB_USER', ''),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'OPTIONS': {
-            'driver': os.environ.get('DB_DRIVER', 'ODBC Driver 18 for SQL Server'),
-            # With a DB_USER set we use SQL Server authentication (the cloud case).
-            # With it blank we fall back to Windows trusted auth (local dev on
-            # Windows). TrustServerCertificate avoids cert hassles on internal hosts.
-            'extra_params': ('TrustServerCertificate=Yes'
-                             if os.environ.get('DB_USER')
-                             else 'TrustServerCertificate=Yes;Trusted_Connection=Yes'),
-        },
+_db_engine = os.environ.get('DB_ENGINE', 'mssql').lower()
+
+if _db_engine == 'postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'FSA_Debtors'),
+            'HOST': os.environ.get('DB_SERVER', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'USER': os.environ.get('DB_USER', 'fsa_debitor'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'mssql',
+            'NAME': os.environ.get('DB_NAME', 'FSA_Debtors'),
+            'HOST': os.environ.get('DB_SERVER', r'localhost\SQLEXPRESS'),
+            'PORT': os.environ.get('DB_PORT', ''),
+            'USER': os.environ.get('DB_USER', ''),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'OPTIONS': {
+                'driver': os.environ.get('DB_DRIVER', 'ODBC Driver 18 for SQL Server'),
+                'extra_params': ('TrustServerCertificate=Yes'
+                                 if os.environ.get('DB_USER')
+                                 else 'TrustServerCertificate=Yes;Trusted_Connection=Yes'),
+            },
+        }
+    }
 
 
 # Password validation
