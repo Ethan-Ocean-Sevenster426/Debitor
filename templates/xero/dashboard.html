@@ -1,0 +1,269 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Dashboard - FSA Debtor System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 6px; }
+    .status-tile { background: #f5fbfb; border: 1px solid #d6efee; border-radius: 8px; padding: 14px 16px; display: block; text-decoration: none; color: inherit; }
+    a.status-tile { transition: box-shadow .15s, transform .1s; }
+    a.status-tile:hover { box-shadow: 0 4px 14px rgba(0,0,0,.12); transform: translateY(-1px); text-decoration: none; }
+    .status-tile .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #5a8a8a; }
+    .status-tile .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+    .status-tile .hint { font-size: 10.5px; color: #9ca3af; margin-top: 2px; }
+    .status-tile.accent { background: var(--brand-teal); border-color: var(--brand-teal); }
+    .status-tile.accent .label { color: #d6f1f0; } .status-tile.accent .value { color: #fff; }
+    .status-tile.call { background: #fff4e5; border-color: #f5cd8f; }
+    .status-tile.call .label, .status-tile.call .value { color: #b45309; }
+    .status-tile.warn { background: #fef3c7; border-color: #f1d488; }
+    .status-tile.warn .label, .status-tile.warn .value { color: #a16207; }
+    .status-tile.danger { background: #fee2e2; border-color: #f3c2c7; }
+    .status-tile.danger .label, .status-tile.danger .value { color: #991b1b; }
+    .status-tile.missed { background: #fde8e8; border-color: #f0a9a9; }
+    .status-tile.missed .label, .status-tile.missed .value { color: #b91c1c; }
+    .status-tile.recovered { background: #ecfdf5; border-color: #a7f3d0; }
+    .status-tile.recovered .label, .status-tile.recovered .value { color: #047857; }
+    .call-tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #fff4e5; color: #b45309; }
+    .data-table th.num, .data-table td.num { text-align: right; }
+
+    .line-chart { width: 100%; height: auto; }
+    .line-chart .axis { stroke: #e5e7eb; stroke-width: 1; }
+    .line-chart .lbl { fill: #9ca3af; font-size: 8.5px; }
+    .line-chart .area { fill: rgba(14,124,123,.08); }
+
+    .bar-chart .axis { stroke: #e5e7eb; stroke-width: 1; }
+    .bar-chart rect:hover { opacity: .85; }
+    .bar-legend { display: flex; gap: 20px; font-size: 12.5px; color: #475569; margin-top: 6px; }
+    .bar-legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; align-items: start; }
+    @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+    .pie { width: 170px; height: 170px; border-radius: 50%; margin: 0 auto; }
+    .pie-legend { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12.5px; }
+    .pie-legend li { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pie-legend .sw { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+    .pie-legend .ct { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+    .alloc-bar-row { display: grid; grid-template-columns: 150px 1fr 50px; align-items: center; gap: 12px; margin-bottom: 7px; font-size: 13px; }
+    .alloc-track { background: #eef2f2; border-radius: 4px; height: 16px; overflow: hidden; }
+    .alloc-fill { background: var(--brand-teal); height: 100%; border-radius: 4px; min-width: 2px; }
+    .alloc-ct { text-align: right; font-weight: 700; }
+    .mark-called-btn { background: #fff; border: 1px solid #b8e0de; color: var(--brand-teal); border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .mark-called-btn:hover { background: var(--brand-teal); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle mt-0">Connected to <strong>{{ tenant_name }}</strong></p>
+        </div>
+        {% if is_super_admin %}
+        <form method="get" style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:13px; font-weight:600; color:var(--text-muted);">View administrator:</label>
+            <select name="admin" class="form-control" style="width:auto;" onchange="this.form.submit()">
+                <option value="">— Whole system —</option>
+                {% for a in admins %}
+                <option value="{{ a.id }}"{% if view_admin_id == a.id|stringformat:'s' %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if is_super_admin %}
+<div class="page-card">
+    <h2 class="mt-0">System Overview</h2>
+    <div class="status-grid">
+        <div class="status-tile accent"><div class="label">Total outstanding</div><div class="value">R&nbsp;{{ system_total|floatformat:2|intcomma }}</div></div>
+        <div class="status-tile"><div class="label">Debtors with balances</div><div class="value">{{ system_debtors }}</div></div>
+        <a class="status-tile call" href="{% url 'xero_aging_report' %}?stage=call"><div class="label">&#128222; Calls required</div><div class="value">{{ system_calls }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile missed" href="{% url 'xero_aging_report' %}?stage=missed"><div class="label">&#9888; Missed calls</div><div class="value">{{ system_missed }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile warn" href="{% url 'xero_aging_report' %}?stage=final"><div class="label">At final demand</div><div class="value">{{ system_final }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile danger" href="{% url 'xero_aging_report' %}?stage=handover"><div class="label">At handover</div><div class="value">{{ system_handover }}</div><div class="hint">view &rarr;</div></a>
+        <div class="status-tile recovered"><div class="label">&#128176; Recovered this month</div><div class="value">R&nbsp;{{ system_recovered_month|floatformat:2|intcomma }}</div><div class="hint">all-time R {{ system_recovered_total|floatformat:2|intcomma }}</div></div>
+        <div class="status-tile"><div class="label">Unallocated companies</div><div class="value">{{ unallocated }}</div></div>
+    </div>
+
+    <div class="charts-row" style="margin-top:20px;">
+        <div>
+            <h3 class="mt-0">Outstanding by invoice month</h3>
+            {% include "xero/_linechart.html" with chart=system_mom_chart %}
+        </div>
+        <div>
+            <h3 class="mt-0">Invoices by age</h3>
+            {% include "xero/_pie.html" with pie=system_pie %}
+        </div>
+    </div>
+
+    <h3 style="margin:22px 0 6px;">Recovered vs outstanding (month over month)</h3>
+    {% include "xero/_barchart.html" with bars=system_recovery_bars %}
+</div>
+
+{# ---- Action items + lawyers overview ---- #}
+<div class="page-card">
+    <h2 class="mt-0">Action Items &amp; Lawyers</h2>
+    <div class="status-grid">
+        {% if top_collector %}
+        <div class="status-tile recovered"><div class="label">&#127942; Top collector (mo)</div><div class="value" style="font-size:16px;">{{ top_collector.name }}</div><div class="hint">R {{ top_collector.recovered_month|floatformat:2|intcomma }} recovered</div></div>
+        {% endif %}
+        <a class="status-tile {% if legal_pending %}warn{% endif %}" href="{% url 'xero_legal' %}"><div class="label">&#9878; Awaiting your approval</div><div class="value">{{ legal_pending }}</div><div class="hint">review &rarr;</div></a>
+        <a class="status-tile" href="{% url 'xero_legal' %}"><div class="label">Active legal matters</div><div class="value">{{ legal_active }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile {% if legal_not_in_litigation %}call{% endif %}" href="{% url 'xero_legal' %}"><div class="label">Not yet in litigation</div><div class="value">{{ legal_not_in_litigation }}</div><div class="hint">still in collections</div></a>
+        <div class="status-tile"><div class="label">Closed matters</div><div class="value">{{ legal_closed }}</div></div>
+        {% if unallocated %}<a class="status-tile warn" href="{% url 'xero_aging_report' %}"><div class="label">Unallocated companies</div><div class="value">{{ unallocated }}</div><div class="hint">allocate &rarr;</div></a>{% endif %}
+    </div>
+</div>
+
+{# ---- Critical debtors ---- #}
+{% if critical_debtors %}
+<div class="page-card">
+    <h2 class="mt-0">&#128680; Critical debtors &mdash; urgent action</h2>
+    <p class="page-subtitle mt-0">Biggest books that are at final-demand / handover age (60+ days) and not yet with the lawyers.</p>
+    <table class="data-table">
+        <thead><tr><th>Company</th><th class="num">Outstanding</th><th class="num">Most overdue</th><th>Allocated to</th></tr></thead>
+        <tbody>
+            {% for d in critical_debtors %}
+            <tr>
+                <td><a href="{% url 'xero_company_report' %}?cid={{ d.cid|urlencode }}" target="_blank" rel="noopener">{{ d.name }}</a></td>
+                <td class="num"><strong>R&nbsp;{{ d.total|floatformat:2|intcomma }}</strong></td>
+                <td class="num"><strong style="color:#b91c1c;">{{ d.max_dpd }} days</strong></td>
+                <td>{{ d.admin_name|default:"— Unallocated —" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="page-card">
+    <h2 class="mt-0">Administrator Tracking</h2>
+    <p class="page-subtitle mt-0">Clients allocated and book health per administrator. {{ unallocated }} compan{{ unallocated|pluralize:"y,ies" }} unallocated.</p>
+
+    <h3 style="margin:6px 0 10px;">Clients allocated</h3>
+    {% for a in admin_overview %}
+    <div class="alloc-bar-row">
+        <span>{{ a.name }}</span>
+        <span class="alloc-track"><span class="alloc-fill" style="width: {{ a.pct|floatformat:0 }}%;"></span></span>
+        <span class="alloc-ct">{{ a.companies }}</span>
+    </div>
+    {% endfor %}
+
+    {% if admin_overview %}
+    <table class="data-table" style="margin-top:14px;">
+        <thead>
+            <tr><th>Administrator</th><th class="num">Clients allocated</th><th class="num">Outstanding</th>
+                <th class="num">Recovered (mo)</th><th class="num">Calls required</th><th class="num">Missed calls</th><th class="num">Final demand</th><th class="num">Handover</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for a in admin_overview %}
+            <tr>
+                <td><a href="?admin={{ a.id }}">{{ a.name }}</a></td>
+                <td class="num">{{ a.companies }}</td>
+                <td class="num">R&nbsp;{{ a.total|floatformat:2|intcomma }}</td>
+                <td class="num" title="All-time: R {{ a.recovered_total|floatformat:2|intcomma }}">{% if a.recovered_month %}<strong style="color:#047857;">R&nbsp;{{ a.recovered_month|floatformat:2|intcomma }}</strong>{% else %}&mdash;{% endif %}</td>
+                <td class="num">{{ a.calls }}</td>
+                <td class="num">{% if a.missed %}<strong style="color:#b91c1c;">{{ a.missed }}</strong>{% else %}0{% endif %}</td>
+                <td class="num">{{ a.final }}</td>
+                <td class="num">{{ a.handover }}</td>
+                <td class="num"><a href="?admin={{ a.id }}">View &rarr;</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p class="muted">No debtors allocated yet.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if my_alloc_count %}
+<div class="page-card">
+    <div class="flex-between">
+        <h2 class="mt-0">{% if view_admin_name %}{{ view_admin_name }} — workload{% else %}My Allocated Debtors{% endif %}</h2>
+        <a class="btn btn-secondary btn-sm" href="{% url 'xero_aging_report' %}{% if view_admin_id %}?admin={{ view_admin_id }}{% endif %}">View {% if view_admin_name %}their{% else %}my{% endif %} debtors</a>
+    </div>
+    <div class="status-grid">
+        <div class="status-tile accent"><div class="label">{% if view_admin_name %}Outstanding{% else %}My outstanding{% endif %}</div><div class="value">R&nbsp;{{ my_total|floatformat:2|intcomma }}</div></div>
+        <div class="status-tile"><div class="label">Companies allocated</div><div class="value">{{ my_alloc_count }}</div></div>
+        <a class="status-tile call" href="{% url 'xero_aging_report' %}?stage=call{% if view_admin_id %}&amp;admin={{ view_admin_id }}{% endif %}"><div class="label">&#128222; Calls required</div><div class="value">{{ calls_required }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile missed" href="{% url 'xero_aging_report' %}?stage=missed{% if view_admin_id %}&amp;admin={{ view_admin_id }}{% endif %}"><div class="label">&#9888; Missed calls</div><div class="value">{{ missed_calls }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile warn" href="{% url 'xero_aging_report' %}?stage=final{% if view_admin_id %}&amp;admin={{ view_admin_id }}{% endif %}"><div class="label">At final demand</div><div class="value">{{ final_demand_count }}</div><div class="hint">view &rarr;</div></a>
+        <a class="status-tile danger" href="{% url 'xero_aging_report' %}?stage=handover{% if view_admin_id %}&amp;admin={{ view_admin_id }}{% endif %}"><div class="label">At handover</div><div class="value">{{ handover_count }}</div><div class="hint">view &rarr;</div></a>
+        <div class="status-tile recovered"><div class="label">&#128176; Recovered this month</div><div class="value">R&nbsp;{{ my_recovered_month|floatformat:2|intcomma }}</div><div class="hint">all-time R {{ my_recovered_total|floatformat:2|intcomma }}</div></div>
+    </div>
+
+    <div class="charts-row" style="margin-top:20px;">
+        <div>
+            <h3 class="mt-0">Outstanding by invoice month</h3>
+            {% include "xero/_linechart.html" with chart=my_mom_chart %}
+        </div>
+        <div>
+            <h3 class="mt-0">Invoices by age</h3>
+            {% include "xero/_pie.html" with pie=my_pie %}
+        </div>
+    </div>
+
+    <h3 style="margin:22px 0 6px;">Recovered vs outstanding (month over month)</h3>
+    {% include "xero/_barchart.html" with bars=my_recovery_bars %}
+
+    {% if my_priority %}
+    <h3 style="margin:22px 0 6px;">&#11088; Priority debtors</h3>
+    <p class="muted" style="margin-top:0;">Your biggest, most overdue books &mdash; focus here first.</p>
+    <table class="data-table">
+        <thead><tr><th>Company</th><th class="num">Outstanding</th><th class="num">Most overdue</th><th></th></tr></thead>
+        <tbody>
+            {% for d in my_priority %}
+            <tr>
+                <td>{{ d.name }}</td>
+                <td class="num"><strong>R&nbsp;{{ d.total|floatformat:2|intcomma }}</strong></td>
+                <td class="num">{{ d.max_dpd }} days</td>
+                <td class="num"><a href="{% url 'xero_aging_report' %}?q={{ d.name|urlencode }}">Open &rarr;</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if call_list %}
+    <h3 style="margin:22px 0 6px;">&#128222; Invoices to call about ({{ calls_required }})</h3>
+    <p class="muted" style="margin-top:0;">Invoices at the 14 or 21-day reminder. Phone the client, then mark the invoice as called.</p>
+    <table class="data-table">
+        <thead><tr><th>Company</th><th>Invoice</th><th>Stage</th><th class="num">Days overdue</th><th class="num">Amount</th><th></th></tr></thead>
+        <tbody>
+            {% for c in call_list %}
+            <tr>
+                <td>{{ c.name }}</td>
+                <td>{{ c.number }}</td>
+                <td><span class="call-tag">{{ c.stage }}</span></td>
+                <td class="num">{{ c.dpd }}</td>
+                <td class="num">R&nbsp;{{ c.amount|floatformat:2|intcomma }}</td>
+                <td class="num">
+                    <form method="post" action="{% url 'xero_log_call' %}" class="js-call-form remove-on-call" style="display:inline;"
+                          data-company="{{ c.name }}" data-invoice="{{ c.number }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="invoice_id" value="{{ c.invoice_id }}">
+                        <input type="hidden" name="invoice_number" value="{{ c.number }}">
+                        <input type="hidden" name="contact_id" value="{{ c.cid }}">
+                        <input type="hidden" name="contact_name" value="{{ c.name }}">
+                        <input type="hidden" name="next" value="{% url 'xero_dashboard' %}">
+                        <button type="submit" class="mark-called-btn">&#10003; Mark called</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted" style="margin-top:14px;">&#9989; No calls outstanding right now.</p>
+    {% endif %}
+</div>
+{% elif not is_super_admin %}
+<div class="page-card">
+    <h2 class="mt-0">My Allocated Debtors</h2>
+    <p class="muted">No companies are allocated to you yet.</p>
+</div>
+{% endif %}
+{% endblock %}

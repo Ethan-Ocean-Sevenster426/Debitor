@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FSA Debtor System{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=4">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <nav class="navbar">
+        <div class="navbar-top">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <img class="navbar-logo" src="{% static 'img/fsa-logo.png' %}" alt="FSA">
+                DEBTOR SYSTEM
+            </a>
+            <div class="navbar-links">
+                {% if not user.is_lawyer %}
+                <a href="{% url 'xero_dashboard' %}" class="{% if request.resolver_match.url_name == 'xero_dashboard' %}active{% endif %}">Dashboard</a>
+                <a href="{% url 'xero_aging_report' %}" class="{% if request.resolver_match.url_name == 'xero_aging_report' %}active{% endif %}">Debtors Action Page</a>
+                {% endif %}
+                {% if user.is_super_admin %}
+                <a href="{% url 'xero_closed_debtors' %}" class="{% if request.resolver_match.url_name == 'xero_closed_debtors' %}active{% endif %}">Closed Debtors</a>
+                <a href="{% url 'xero_write_offs' %}" class="{% if request.resolver_match.url_name == 'xero_write_offs' %}active{% endif %}">Write-offs</a>
+                <a href="{% url 'xero_handover' %}" class="{% if request.resolver_match.url_name == 'xero_handover' or request.resolver_match.url_name == 'xero_handover_overrides' %}active{% endif %}">Handover</a>
+                {% endif %}
+                {% if user.is_super_admin or user.is_administrator or user.is_lawyer %}
+                <a href="{% url 'xero_legal' %}" class="{% if 'legal' in request.resolver_match.url_name %}active{% endif %}">Lawyers</a>
+                {% endif %}
+                {% if user.is_super_admin %}
+                <a href="{% url 'xero_filing' %}" class="{% if 'filing' in request.resolver_match.url_name %}active{% endif %}">Filing</a>
+                <a href="{% url 'user_list' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">Users</a>
+                <a href="{% url 'xero_schedule' %}" class="{% if request.resolver_match.url_name == 'xero_schedule' %}active{% endif %}">Schedule</a>
+                <a href="{% url 'xero_communication_setup' %}" class="{% if request.resolver_match.url_name == 'xero_communication_setup' %}active{% endif %}">Communication Setup</a>
+                <a href="{% url 'xero_manual' %}" class="{% if request.resolver_match.url_name == 'xero_manual' %}active{% endif %}">Manual</a>
+                {% endif %}
+            </div>
+            <div class="navbar-right">
+                <span class="navbar-user">{{ user.get_full_name|default:user.email }}</span>
+                <span class="navbar-role">{{ user.get_role_display }}</span>
+                <form method="post" action="{% url 'logout' %}" style="margin:0;">
+                    {% csrf_token %}
+                    <button type="submit" class="navbar-logout">Logout</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <div class="{% block container_class %}page-container{% endblock %}">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
+    {% block extra_body %}{% endblock %}
+
+    {% if user.is_authenticated %}
+    <script>window.CSRF_TOKEN = "{{ csrf_token }}";</script>
+    <div id="call-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <h3 style="margin:0 0 4px;">&#128222; Log call</h3>
+            <p class="muted" id="call-modal-sub" style="margin:0 0 12px; font-size:13px;"></p>
+            <label style="font-weight:600; font-size:13px;">Comment — what was discussed</label>
+            <textarea id="call-modal-note" rows="3" placeholder="e.g. Spoke to accounts, promised payment by Friday"></textarea>
+            <div class="alert alert-error" id="call-modal-err" style="display:none; margin:8px 0 0;">Please enter a comment.</div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="call-modal-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="call-modal-ok">Log call &amp; comment</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-overlay { position: fixed; inset: 0; background: rgba(20,25,40,.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { background: #fff; border-radius: 12px; padding: 22px 24px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+        .modal-box textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; padding: 9px; font-family: inherit; font-size: 14px; box-sizing: border-box; margin-top: 6px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    </style>
+    <script>
+    (function () {
+        var modal = document.getElementById('call-modal');
+        if (!modal) return;
+        var note = document.getElementById('call-modal-note'),
+            err = document.getElementById('call-modal-err'),
+            sub = document.getElementById('call-modal-sub'),
+            pending = null;
+        function close() { modal.style.display = 'none'; pending = null; note.value = ''; err.style.display = 'none'; }
+        document.getElementById('call-modal-cancel').onclick = close;
+        modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+
+        document.addEventListener('submit', function (e) {
+            var form = e.target;
+            if (!form.classList || !form.classList.contains('js-call-form')) return;
+            e.preventDefault();
+            pending = form;
+            sub.textContent = (form.getAttribute('data-company') || '') +
+                (form.getAttribute('data-invoice') ? ' · ' + form.getAttribute('data-invoice') : '');
+            err.style.display = 'none'; note.value = '';
+            modal.style.display = 'flex'; note.focus();
+        });
+
+        document.getElementById('call-modal-ok').onclick = function () {
+            if (!pending) return;
+            if (!note.value.trim()) { err.textContent = 'Please enter a comment.'; err.style.display = 'block'; return; }
+            var form = pending;
+            var fd = new FormData(form);
+            fd.set('note', note.value.trim());
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                headers: {'X-CSRFToken': window.CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest'},
+                body: fd,
+            }).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d.ok) { err.textContent = d.error || 'Could not log call.'; err.style.display = 'block'; return; }
+                if (form.classList.contains('remove-on-call')) {
+                    var tr = form.closest('tr'); if (tr && tr.parentNode) tr.parentNode.removeChild(tr);
+                } else if (window.refreshDebtorStatement && form.closest('.debtor-detail')) {
+                    // On the debtor statement, re-render in place so the proper
+                    // "✓ called" + undo control appears (no full page reload).
+                    window.refreshDebtorStatement(form);
+                } else {
+                    var span = document.createElement('span');
+                    span.className = 'called-tag'; span.innerHTML = '✓ called';
+                    if (form.parentNode) form.parentNode.replaceChild(span, form);
+                }
+                close();
+            }).catch(function () { err.textContent = 'Could not log call.'; err.style.display = 'block'; });
+        };
+    })();
+    </script>
+    {% endif %}
+</body>
+</html>

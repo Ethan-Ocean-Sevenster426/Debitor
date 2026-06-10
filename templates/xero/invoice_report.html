@@ -1,0 +1,93 @@
+{% load static %}{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Lifecycle Report{% if invoice %} - {{ invoice.invoice_number }}{% endif %}</title>
+    <style>
+        :root { --teal:#0E7C7B; --navy:rgb(30,41,59); }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1f2937; margin:0; padding:28px 36px; }
+        .report-head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--teal); padding-bottom:14px; }
+        .report-head img { height:46px; }
+        .report-head h1 { font-size:20px; margin:0; }
+        .report-head .meta { font-size:11px; color:#6b7280; text-align:right; }
+        .legal { font-size:11px; color:#6b7280; margin:8px 0 20px; }
+        h2 { font-size:14px; color:var(--navy); border-bottom:1px solid #e5e7eb; padding-bottom:5px; margin:24px 0 10px; }
+        .kv { display:grid; grid-template-columns:160px 1fr; gap:4px 12px; font-size:13px; }
+        .kv .k { color:#6b7280; font-weight:600; }
+        table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }
+        th { background:#f1f5f5; text-align:left; padding:7px 9px; border-bottom:2px solid #d6efee; color:#5a8a8a; text-transform:uppercase; font-size:10.5px; letter-spacing:.4px; }
+        td { padding:7px 9px; border-bottom:1px solid #eef2f2; vertical-align:top; }
+        .tag { display:inline-block; padding:1px 8px; border-radius:10px; font-size:10.5px; font-weight:600; }
+        .tag.email { background:#e0f2f2; color:#065f5e; } .tag.comment { background:#fff4e5; color:#b45309; }
+        .att a { display:block; font-size:11px; }
+        .toolbar { margin:18px 0; }
+        .btn { background:var(--teal); color:#fff; border:none; padding:9px 18px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; }
+        .muted { color:#9ca3af; }
+        @media print { .toolbar { display:none; } body { padding:0; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button>
+        <a class="btn" style="background:#6b7280;" href="{% url 'xero_aging_report' %}">&larr; Back</a>
+    </div>
+
+    <div class="report-head">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <img src="{% static 'img/fsa-logo.png' %}" alt="FSA">
+            <div><h1>Invoice Lifecycle Report</h1>
+                <div class="muted" style="font-size:12px;">{{ tenant_name }}</div></div>
+        </div>
+        <div class="meta">
+            Generated {{ generated_at|date:"Y-m-d H:i" }}<br>
+            by {{ generated_by }}
+        </div>
+    </div>
+    <p class="legal">This report is a system-generated record of the communication and activity lifecycle for the invoice below, produced from the FSA Debtor System for record-keeping and legal purposes.</p>
+
+    <h2>Invoice &amp; debtor</h2>
+    <div class="kv">
+        <div class="k">Debtor</div><div>{% if invoice %}{{ invoice.contact_name }}{% else %}&mdash;{% endif %}</div>
+        {% if contact %}
+        <div class="k">Account #</div><div>{{ contact.account_number|default:"&mdash;" }}</div>
+        <div class="k">Email</div><div>{{ contact.email|default:"&mdash;" }}</div>
+        {% endif %}
+        <div class="k">Invoice #</div><div>{% if invoice %}{{ invoice.invoice_number }}{% else %}{{ invoice_id }}{% endif %} &mdash; <a href="{% url 'xero_invoice_online' invoice_id %}" target="_blank" rel="noopener">&#128279; View online</a></div>
+        {% if invoice %}
+        <div class="k">Invoice date</div><div>{{ invoice.invoice_date|date:"Y-m-d"|default:"&mdash;" }}</div>
+        <div class="k">Due date</div><div>{{ invoice.due_date|date:"Y-m-d"|default:"&mdash;" }}</div>
+        <div class="k">Days overdue</div><div>{% if invoice.days_past_due > 0 %}{{ invoice.days_past_due }}{% else %}Not overdue{% endif %}</div>
+        <div class="k">Invoice total</div><div>R&nbsp;{{ invoice.total|floatformat:2|intcomma }}</div>
+        <div class="k">Amount outstanding</div><div><strong>R&nbsp;{{ invoice.amount_due|floatformat:2|intcomma }}</strong></div>
+        <div class="k">Status</div><div>{{ invoice.status }}</div>
+        {% if invoice.project_code %}<div class="k">Project</div><div>{{ invoice.project_code }}</div>{% endif %}
+        {% if invoice.inspector %}<div class="k">Inspector</div><div>{{ invoice.inspector }}</div>{% endif %}
+        {% endif %}
+    </div>
+
+    <h2>Lifecycle ({{ events|length }} event{{ events|length|pluralize }})</h2>
+    {% if events %}
+    <table>
+        <thead><tr><th style="width:130px;">Date</th><th style="width:90px;">Type</th><th>Detail</th><th style="width:130px;">By</th></tr></thead>
+        <tbody>
+            {% for e in events %}
+            <tr>
+                <td>{{ e.date }}</td>
+                <td>{% if e.is_comment %}<span class="tag comment">Comment</span>{% elif e.is_email %}<span class="tag email">Email</span>{% else %}{{ e.action }}{% endif %}</td>
+                <td>
+                    {% if e.is_comment %}{{ e.details }}{% else %}<strong>{{ e.action }}</strong>{% if e.details %} — {{ e.details }}{% endif %}{% endif %}
+                    {% if e.attachments %}<div class="att">{% for a in e.attachments %}<a href="{{ a.url }}">&#128206; {{ a.name }}</a>{% endfor %}</div>{% endif %}
+                </td>
+                <td>{{ e.user }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No lifecycle events recorded for this invoice.</p>
+    {% endif %}
+</body>
+</html>

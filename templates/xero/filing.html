@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Filing - FSA Debtor System{% endblock %}
+{% block extra_head %}
+<style>
+    .file-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .file-table th { background: var(--brand-teal, #0E7C7B); color: #fff; text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+    .file-table td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+    .file-table tr:hover td { background: #f8fafb; }
+    .file-search { display: flex; gap: 8px; margin: 0 0 14px; }
+    .file-search input { flex: 1; max-width: 360px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .ls-chip { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <h1 class="page-title">Filing &amp; Archive</h1>
+    </div>
+    <p class="page-subtitle">Every company on file. Open a company to see its invoices, all comments, uploaded documents and legal history &mdash; including archived/closed ones.</p>
+    <form class="file-search" method="get">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search company name…" autofocus>
+        <button class="btn btn-primary btn-sm" type="submit">Search</button>
+        {% if q %}<a class="btn btn-secondary btn-sm" href="{% url 'xero_filing' %}">Clear</a>{% endif %}
+    </form>
+
+    {% if companies %}
+    <table class="file-table">
+        <thead><tr><th>Company</th><th class="num">Open invoices</th><th>Legal status</th><th></th></tr></thead>
+        <tbody>
+            {% for c in companies %}
+            <tr>
+                <td><strong>{{ c.name }}</strong></td>
+                <td class="num">{{ c.open_invoices }}</td>
+                <td>{% if c.legal_status %}<span class="ls-chip">{{ c.legal_status }}</span>{% else %}&mdash;{% endif %}</td>
+                <td style="text-align:right;"><a class="btn btn-secondary btn-sm" href="{% url 'xero_filing_company' %}?cid={{ c.cid|urlencode|default:c.name|urlencode }}">Open file &rarr;</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px;">{{ total }} compan{{ total|pluralize:"y,ies" }}.</p>
+    {% else %}
+    <p class="muted">No companies found{% if q %} for “{{ q }}”{% endif %}.</p>
+    {% endif %}
+</div>
+{% endblock %}

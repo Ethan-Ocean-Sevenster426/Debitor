@@ -1,0 +1,246 @@
+{% load humanize %}
+{% comment %}
+Inner HTML of one debtor's expanded detail row. Loaded on demand by the Debtors
+Action / Closed / Write-off / Handover pages so the initial page weight stays
+small. Context: d, write_off_page, handover_page, can_handover_manage,
+current_full_path.
+{% endcomment %}
+{% if d.contact_id %}
+<div class="detail-toolbar">
+    <button type="button" class="contact-btn"
+            data-url="{% url 'xero_contact_detail' d.contact_id %}"
+            data-target="contact-{{ d.index }}"
+            onclick="loadContact(this)">&#128100; Contact details</button>
+
+    {% if can_handover_manage %}
+    {# Per-debtor handover rule: when (or whether) this debtor's invoices auto-land on Handover. #}
+    <button type="button" class="contact-btn" onclick="toggleHandoverSettings('hset-{{ d.index }}');"
+            style="margin-left:8px;" title="Set how many days overdue before this debtor's invoices auto-hand over">
+        &#9881; Handover rule: {% if not d.handover_auto %}Never{% else %}{{ d.handover_days }} days{% endif %}{% if d.handover_custom %} (custom){% endif %}</button>
+    <form method="post" action="{% url 'xero_handover_settings' %}" id="hset-{{ d.index }}" class="handover-settings-form" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="contact_id" value="{{ d.cid }}">
+        <input type="hidden" name="contact_name" value="{{ d.name }}">
+        <input type="hidden" name="next" value="{{ current_full_path }}">
+        <div class="hs-title">Auto-handover rule for {{ d.name }}</div>
+        <label class="hs-opt"><input type="radio" name="mode" value="days" {% if d.handover_auto %}checked{% endif %}>
+            Auto-hand over at <input type="number" name="handover_days" min="0" max="3650" value="{{ d.handover_days }}" class="hs-days"> days past due</label>
+        <label class="hs-opt"><input type="radio" name="mode" value="never" {% if not d.handover_auto %}checked{% endif %}>
+            Never auto-hand over (e.g. payment arrangement)</label>
+        {% if d.handover_custom %}<label class="hs-opt"><input type="radio" name="mode" value="default">
+            Reset to the system default ({{ default_handover_days }} days)</label>{% endif %}
+        <div class="hs-actions"><button type="submit" class="btn btn-primary btn-sm">Save rule</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleHandoverSettings('hset-{{ d.index }}');">Cancel</button></div>
+    </form>
+    {% endif %}
+
+    {% if can_collect and not write_off_page and not handover_page %}
+    {# Per-debtor follow-up cadence shift — for payment arrangements (collections). #}
+    <button type="button" class="contact-btn" onclick="toggleHandoverSettings('fset-{{ d.index }}');"
+            style="margin-left:8px;" title="Push this debtor's call/WhatsApp/email reminders later (e.g. a payment arrangement)">
+        &#9203; Follow-up: {% if d.cadence_shift %}+{{ d.cadence_shift }} days{% else %}normal{% endif %}</button>
+    <form method="post" action="{% url 'xero_followup_shift' %}" id="fset-{{ d.index }}" class="handover-settings-form" style="display:none;">
+        {% csrf_token %}
+        <input type="hidden" name="contact_id" value="{{ d.cid }}">
+        <input type="hidden" name="contact_name" value="{{ d.name }}">
+        <input type="hidden" name="next" value="{{ current_full_path }}">
+        <div class="hs-title">Follow-up cadence for {{ d.name }}</div>
+        <label class="hs-opt">Push reminders later by
+            <input type="number" name="shift_days" min="0" max="3650" value="{{ d.cadence_shift }}" class="hs-days"> days
+            <span class="muted" style="font-size:12px;">(0 = normal). The whole cadence (7/14/21/60/65) moves out together — use for a payment arrangement so the debtor isn't chased and the admin isn't prompted too early.</span></label>
+        <label class="hs-opt">Note (optional): <input type="text" name="note" value="" style="width:60%;" placeholder="e.g. R5k/month arrangement until Dec"></label>
+        <div class="hs-actions"><button type="submit" class="btn btn-primary btn-sm">Save</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleHandoverSettings('fset-{{ d.index }}');">Cancel</button></div>
+    </form>
+    {% endif %}
+
+    {% if handover_page and can_handover_manage %}
+    {# Send the whole company to the lawyers to start the LBINC process. #}
+    {% if not d.legal_status %}
+    <form method="post" action="{% url 'xero_legal_send' %}" style="display:inline; margin-left:8px;"
+          onsubmit="return confirm('Send {{ d.name|escapejs }} to the lawyers? It must then be approved by an administrator before it appears on the Lawyers page.');">
+        {% csrf_token %}
+        <input type="hidden" name="contact_id" value="{{ d.cid }}">
+        <input type="hidden" name="contact_name" value="{{ d.name }}">
+        <input type="hidden" name="next" value="{{ current_full_path }}">
+        <button type="submit" class="contact-btn" style="background:#eef2ff; color:#3730a3; border-color:#c7d2fe;">&#9878; Send to lawyers</button>
+    </form>
+    {% elif d.legal_status == 'pending' %}
+    <span class="legal-chip pending" style="margin-left:8px;">&#9878; Sent to lawyers — pending Super Admin approval</span>
+    {% if can_approve_legal %}
+    <form method="post" action="{% url 'xero_legal_approve' %}" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="matter_id" value="{{ d.legal_id }}">
+        <input type="hidden" name="next" value="{{ current_full_path }}">
+        <button type="submit" class="contact-btn" style="background:#ecfdf5; color:#065f46; border-color:#a7f3d0;">&#10003; Approve for lawyers</button>
+    </form>
+    {% endif %}
+    {% elif d.legal_status == 'active' %}
+    <a class="legal-chip active" style="margin-left:8px; text-decoration:none;" href="{% url 'xero_legal_matter' d.legal_id %}">&#9878; With lawyers &mdash; open workflow</a>
+    {% else %}
+    <span class="legal-chip closed" style="margin-left:8px;">&#9878; Lawyers: closed</span>
+    {% endif %}
+    {% endif %}
+</div>
+<div class="contact-panel" id="contact-{{ d.index }}" style="display:none;"></div>
+{% endif %}
+<table class="statement">
+    <thead>
+        <tr>
+            <th>Invoice #</th>
+            <th>Invoice Date</th>
+            <th>Due Date</th>
+            <th class="num">Days Overdue</th>
+            <th>Bucket</th>
+            <th>Project</th>
+            <th>Status</th>
+            <th class="num">Invoice Total</th>
+            <th class="num">Amount Due</th>
+            <th>Report</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for inv in d.invoices %}
+        <tr class="inv-row{% if inv.invoice_id %} clickable{% endif %}"
+            {% if inv.invoice_id %}data-url="{% url 'xero_invoice_history' inv.invoice_id %}"
+            data-comment-url="{% url 'xero_add_comment' inv.invoice_id %}"
+            data-report-url="{% url 'xero_invoice_report' inv.invoice_id %}"
+            data-target="hist-{{ inv.invoice_id }}" onclick="loadHistory(this)"
+            title="Click to view this invoice's lifecycle &amp; add comments"{% endif %}>
+            <td>{% if inv.invoice_id %}<span class="caret inv-caret">&#9654;</span> {% endif %}{{ inv.number|default:"&mdash;" }}
+                {% if inv.invoice_id %}<a href="{% url 'xero_invoice_online' inv.invoice_id %}" target="_blank" rel="noopener" class="online-link" title="Open this invoice online (Xero)" onclick="event.stopPropagation();" style="margin-left:6px;font-size:11px;white-space:nowrap;">&#128279;&nbsp;View online</a>{% endif %}
+                {% if inv.inspector %}<div style="font-size:11px;color:#64748b;margin-top:2px;">Inspector: {{ inv.inspector }}</div>{% endif %}</td>
+            <td>{{ inv.invoice_date|date:"Y-m-d"|default:"&mdash;" }}</td>
+            <td>{{ inv.due_date|date:"Y-m-d"|default:"&mdash;" }}</td>
+            <td class="num">{% if inv.days_past_due > 0 %}{{ inv.days_past_due }}{% else %}&mdash;{% endif %}</td>
+            <td><span class="bucket-tag{% if inv.days_past_due > 0 %} over{% endif %}">{{ inv.bucket }}</span>
+                {% if handover_page %}
+                    {% if inv.handover_marked %}
+                    <span class="ho-badge marked" title="Manually marked for handover by an administrator">&#9889; Marked</span>
+                    {% else %}
+                    <span class="ho-badge auto" title="Auto-listed because it has aged past this debtor's handover threshold">&#8987; Auto-listed</span>
+                    {% endif %}
+                {% endif %}
+                {# Missed markers spell out which channel was not actioned in time. #}
+                {% if inv.missed_call %}<span class="missed-badge sm" title="No call logged within the timeframe">&#9888; Missed call</span>{% endif %}
+                {% if inv.missed_whatsapp %}<span class="missed-badge sm" title="No WhatsApp logged within the timeframe">&#9888; Missed WhatsApp</span>{% endif %}
+                {% if inv.missed_email %}<span class="missed-badge sm" title="No email logged within the timeframe">&#9888; Missed email</span>{% endif %}
+
+                {# Call: outstanding -> button; done in last 7 days -> tick + undo. #}
+                {% if inv.needs_call %}
+                <form method="post" action="{% url 'xero_log_call' %}" class="js-call-form" style="display:inline;"
+                      data-company="{{ d.name }}" data-invoice="{{ inv.number }}" onclick="event.stopPropagation();">
+                    {% csrf_token %}
+                    <input type="hidden" name="invoice_id" value="{{ inv.invoice_id }}">
+                    <input type="hidden" name="invoice_number" value="{{ inv.number }}">
+                    <input type="hidden" name="contact_id" value="{{ d.cid }}">
+                    <input type="hidden" name="contact_name" value="{{ d.name }}">
+                    <input type="hidden" name="next" value="{{ current_full_path }}">
+                    <button type="submit" class="call-now-btn" title="{{ inv.stage }} &mdash; log that you called about this invoice">&#128222; Call</button>
+                </form>
+                {% elif inv.called_recently %}<span class="called-tag" title="Call logged in the last 7 days">&#10003; called <a href="#" class="undo-link" title="Undo &mdash; remove this call mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'call', this);">&#10005;</a></span>{% endif %}
+
+                {# WhatsApp: one template -> direct send; several -> popup to pick. #}
+                {% if inv.needs_whatsapp %}
+                    {% if inv.wa_options|length > 1 %}
+                    <span class="tpl-box">
+                        <button type="button" class="wa-btn" onclick="event.stopPropagation(); toggleTplPop(this);" title="Choose a WhatsApp template to send">&#128241; WhatsApp &#9662;</button>
+                        <div class="tpl-pop" role="menu">
+                            {% for o in inv.wa_options %}
+                            <a href="{{ o.url }}" target="_blank" rel="noopener" role="menuitem"
+                               onclick="event.stopPropagation(); closeTplPops(); logWhatsApp('{{ inv.invoice_id }}', '{{ d.whatsapp_number }}', this);">{{ o.label }}</a>
+                            {% endfor %}
+                        </div>
+                    </span>
+                    {% elif inv.wa_options %}
+                    <a class="wa-btn" href="{{ inv.wa_default_url }}" target="_blank" rel="noopener"
+                       onclick="event.stopPropagation(); logWhatsApp('{{ inv.invoice_id }}', '{{ d.whatsapp_number }}', this);"
+                       title="Send the customer a WhatsApp reminder &mdash; marks WhatsApp as actioned for 7 days">&#128241; WhatsApp</a>
+                    {% endif %}
+                {% elif inv.whatsapped_recently %}<span class="called-tag" title="WhatsApp logged in the last 7 days">&#10003; WhatsApp <a href="#" class="undo-link" title="Undo &mdash; remove this WhatsApp mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'whatsapp', this);">&#10005;</a></span>{% endif %}
+
+                {# Email: one template -> direct send; several -> popup to pick. #}
+                {% if inv.needs_email %}
+                    {% if inv.email_options|length > 1 %}
+                    <span class="tpl-box">
+                        <button type="button" class="email-btn" onclick="event.stopPropagation(); toggleTplPop(this);" title="Choose an email template to send">&#9993; Email &#9662;</button>
+                        <div class="tpl-pop" role="menu">
+                            {% for o in inv.email_options %}
+                            <a href="{{ o.url }}" role="menuitem"
+                               onclick="event.stopPropagation(); closeTplPops(); logEmail('{{ inv.invoice_id }}', '{{ d.email_address|escapejs }}', this);">{{ o.label }}</a>
+                            {% endfor %}
+                        </div>
+                    </span>
+                    {% elif inv.email_options %}
+                    <a class="email-btn" href="{{ inv.email_default_url }}"
+                       onclick="event.stopPropagation(); logEmail('{{ inv.invoice_id }}', '{{ d.email_address|escapejs }}', this);"
+                       title="Email the customer a reminder &mdash; marks email as actioned for 7 days">&#9993; Email</a>
+                    {% else %}
+                    <span class="email-btn disabled" title="No email address on file for this debtor">&#9993; No email</span>
+                    {% endif %}
+                {% elif inv.emailed_recently %}<span class="called-tag" title="Email logged in the last 7 days">&#10003; emailed <a href="#" class="undo-link" title="Undo &mdash; remove this email mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'email', this);">&#10005;</a></span>{% endif %}</td>
+            <td>{{ inv.project_code|default:"&mdash;" }}</td>
+            <td>{{ inv.status }}</td>
+            <td class="num">R&nbsp;{{ inv.total|floatformat:2|intcomma }}</td>
+            <td class="num"><strong>R&nbsp;{{ inv.amount_due|floatformat:2|intcomma }}</strong></td>
+            <td class="row-actions">{% if inv.invoice_id %}
+                <button type="button" class="row-menu-btn" onclick="toggleRowMenu(event, this)" aria-haspopup="true" aria-label="Invoice actions">&#x22EE;</button>
+                <div class="row-menu" role="menu">
+                    <a href="{% url 'xero_invoice_report' inv.invoice_id %}" target="_blank" rel="noopener" role="menuitem"
+                       onclick="event.stopPropagation(); closeAllRowMenus();">&#128196; Report</a>
+                    {# WhatsApp the client at any time; one row per template. #}
+                    {% for o in inv.wa_options %}
+                    <a class="row-menu-item whatsapp" role="menuitem"
+                       href="{{ o.url }}" target="_blank" rel="noopener"
+                       onclick="event.stopPropagation(); closeAllRowMenus(); logWhatsApp('{{ inv.invoice_id }}', '{{ d.whatsapp_number }}', this);"
+                       title="Send this WhatsApp reminder; also resets the 7-day follow-up flag">&#128241; WhatsApp{% if inv.wa_options|length > 1 %}: {{ o.label }}{% else %} again{% endif %}</a>
+                    {% endfor %}
+                    {# Email the client at any time, whether or not an email task is flagged. #}
+                    {% for o in inv.email_options %}
+                    <a class="row-menu-item email" role="menuitem"
+                       href="{{ o.url }}"
+                       onclick="event.stopPropagation(); closeAllRowMenus(); logEmail('{{ inv.invoice_id }}', '{{ d.email_address|escapejs }}', this);"
+                       title="Email the client a reminder; also resets the 7-day email follow-up flag">&#9993; Email{% if inv.email_options|length > 1 %}: {{ o.label }}{% else %} client{% endif %}</a>
+                    {% empty %}
+                    <span class="row-menu-item email disabled" role="menuitem" aria-disabled="true"
+                          title="No email address on file for this debtor in Xero">&#9993; No email on file</span>
+                    {% endfor %}
+                    {% if handover_page %}
+                        {% if can_handover_manage %}
+                            <form method="post" action="{% url 'xero_handover_unmark' %}" onclick="event.stopPropagation();"
+                                  onsubmit="return confirm('Move invoice {{ inv.number|escapejs }} back to the Debtors Action page? If it is still past this debtor''s handover threshold, the debtor will also be set to never auto-hand over.');">
+                                {% csrf_token %}
+                                <input type="hidden" name="invoice_id" value="{{ inv.invoice_id }}">
+                                <input type="hidden" name="invoice_number" value="{{ inv.number }}">
+                                <input type="hidden" name="next" value="{{ current_full_path }}">
+                                <button type="submit" class="row-menu-item moveback" role="menuitem">&#8634; Move back to Debtors Action</button>
+                            </form>
+                        {% endif %}
+                    {% elif write_off_page %}
+                    <form method="post" action="{% url 'xero_unwrite_off_invoice' %}" onclick="event.stopPropagation();"
+                          onsubmit="return confirm('Move invoice {{ inv.number|escapejs }} back to the Debtors Action page?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="invoice_id" value="{{ inv.invoice_id }}">
+                        <input type="hidden" name="invoice_number" value="{{ inv.number }}">
+                        <input type="hidden" name="next" value="{{ current_full_path }}">
+                        <button type="submit" class="row-menu-item moveback" role="menuitem">&#8634; Move back</button>
+                    </form>
+                    {% else %}
+                    {% if can_manage %}
+                    <button type="button" class="row-menu-item handover" role="menuitem"
+                            onclick="event.stopPropagation(); closeAllRowMenus(); openHandoverModal('{{ inv.invoice_id }}', '{{ inv.number|escapejs }}', '{{ d.cid|escapejs }}', '{{ d.name|escapejs }}');">&#9889; Mark for handover</button>
+                    <button type="button" class="row-menu-item write-off" role="menuitem"
+                            onclick="event.stopPropagation(); closeAllRowMenus(); openWriteOffModal('{{ inv.invoice_id }}', '{{ inv.number|escapejs }}', '{{ d.cid|escapejs }}', '{{ d.name|escapejs }}');">&#8855; Write off</button>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            {% endif %}</td>
+        </tr>
+        {% if inv.invoice_id %}
+        <tr class="history-row" id="hist-{{ inv.invoice_id }}" style="display:none;">
+            <td colspan="10"><div class="timeline-wrap muted">Loading&hellip;</div></td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+    </tbody>
+</table>

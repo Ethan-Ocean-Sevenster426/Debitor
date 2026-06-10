@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Sync Schedule - FSA Debtor System{% endblock %}
+{% block extra_head %}
+<style>
+    .sched-card { background: #fff; border-radius: 12px; padding: 22px 26px; box-shadow: 0 2px 10px rgba(15,23,42,.06); margin-bottom: 18px; }
+    .sched-card h2 { font-size: 16px; color: var(--navy); margin: 0 0 12px; }
+    .sched-status { display: flex; gap: 18px; flex-wrap: wrap; }
+    .sched-status .tile { background: #f5fbfb; border: 1px solid #d6efee; border-radius: 8px; padding: 10px 16px; min-width: 200px; }
+    .sched-status .tile .l { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #5a8a8a; }
+    .sched-status .tile .v { font-size: 15px; font-weight: 600; color: var(--navy); margin-top: 2px; }
+    .sched-status .tile.warn .v { color: #b45309; }
+    .sched-status .tile.ok .v { color: #047857; }
+
+    .mode-block { padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+    .mode-block.active { border-color: var(--brand-teal); background: #f7fbfb; }
+    .mode-block label.mode-label { font-weight: 700; color: var(--navy); cursor: pointer; }
+    .mode-block .mode-body { margin-top: 10px; padding-left: 22px; }
+    .mode-block .mode-body.muted { color: #9ca3af; }
+
+    .hour-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; max-width: 640px; }
+    .hour-grid label { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-size: 13px; background: #fff; }
+    .hour-grid input[type=checkbox]:checked + span { color: var(--brand-teal); font-weight: 700; }
+    .hour-grid label:has(input:checked) { border-color: var(--brand-teal); background: #ecfdf5; }
+
+    .form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .form-row label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+    .save-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <h1 class="page-title">Sync Schedule</h1>
+        <div style="display:flex; gap:8px;">
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_dashboard' %}">&larr; Dashboard</a>
+            <a class="btn btn-primary btn-sm" href="{% url 'xero_refresh_now' %}">Refresh now</a>
+        </div>
+    </div>
+    <p class="page-subtitle">Control when the system pulls fresh data from Xero. The Windows Scheduled Task fires hourly; this page tells it when to actually do the work.</p>
+
+    <div class="sched-card">
+        <h2>Status</h2>
+        <div class="sched-status">
+            <div class="tile {% if sched.enabled %}ok{% else %}warn{% endif %}">
+                <div class="l">Auto-sync</div>
+                <div class="v">{% if sched.enabled %}Enabled{% else %}Disabled{% endif %}</div>
+            </div>
+            <div class="tile">
+                <div class="l">Server time</div>
+                <div class="v">{{ server_now|date:"Y-m-d H:i" }} ({{ server_now|date:"T" }})</div>
+            </div>
+            <div class="tile">
+                <div class="l">Last successful sync</div>
+                <div class="v">{% if last_success %}{{ last_success.finished_at|timesince }} ago{% else %}never{% endif %}</div>
+            </div>
+            <div class="tile {% if skip_reason %}warn{% else %}ok{% endif %}">
+                <div class="l">If the scheduler fires now</div>
+                <div class="v">{% if skip_reason %}Skip &mdash; {{ skip_reason }}{% else %}Would run&nbsp;&#10003;{% endif %}</div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" class="sched-card">
+        {% csrf_token %}
+        <h2>Settings</h2>
+
+        <div class="form-row">
+            <label class="toggle">
+                <input type="checkbox" name="enabled" {% if sched.enabled %}checked{% endif %}>
+                Enable automatic refresh
+            </label>
+            <span class="muted" style="font-size:12px;">When off, the hourly task stops doing Xero work; the Refresh now button still works.</span>
+        </div>
+
+        <div class="mode-block {% if sched.mode == 'interval' %}active{% endif %}">
+            <label class="mode-label">
+                <input type="radio" name="mode" value="interval" {% if sched.mode == 'interval' %}checked{% endif %}>
+                Every N hours
+            </label>
+            <div class="mode-body{% if sched.mode != 'interval' %} muted{% endif %}">
+                Refresh every
+                <select name="interval_hours" class="form-control" style="display:inline-block; width:auto;">
+                    {% for n in interval_choices %}
+                    <option value="{{ n }}"{% if sched.interval_hours == n %} selected{% endif %}>{{ n }}</option>
+                    {% endfor %}
+                </select>
+                hour{{ sched.interval_hours|pluralize }} since the last successful sync.
+            </div>
+        </div>
+
+        <div class="mode-block {% if sched.mode == 'fixed' %}active{% endif %}">
+            <label class="mode-label">
+                <input type="radio" name="mode" value="fixed" {% if sched.mode == 'fixed' %}checked{% endif %}>
+                At specific times of day
+            </label>
+            <div class="mode-body{% if sched.mode != 'fixed' %} muted{% endif %}">
+                <div style="margin-bottom:8px;">Tick the hours when a refresh should run (server time):</div>
+                <div class="hour-grid">
+                    {% for slot in hour_grid %}
+                    <label>
+                        <input type="checkbox" name="hour" value="{{ slot.h }}"{% if slot.selected %} checked{% endif %}>
+                        <span>{{ slot.label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="save-row">
+            {% if sched.updated_at %}<span class="muted" style="font-size:12px; align-self:center;">Last changed {{ sched.updated_at|timesince }} ago{% if sched.updated_by %} by {{ sched.updated_by }}{% endif %}</span>{% endif %}
+            <button type="submit" class="btn btn-primary">Save schedule</button>
+        </div>
+    </form>
+
+    <form method="post" class="sched-card">
+        {% csrf_token %}
+        <input type="hidden" name="form" value="golive">
+        <h2>Go-live / implementation date</h2>
+        <p class="page-subtitle" style="margin-top:0;">Invoices <strong>issued before</strong> this date are never flagged as <em>Missed call / WhatsApp / email</em> — they pre-date the system, so there was no chance to log contact in time. They can still be called, WhatsApped and emailed normally. Leave blank to flag everything.</p>
+        <div class="form-row">
+            <label for="go_live_date">Go-live date</label>
+            <input type="date" id="go_live_date" name="go_live_date" value="{{ sysset.go_live_date|date:'Y-m-d' }}"
+                   style="padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+            {% if sysset.go_live_date %}<span class="muted" style="font-size:12px;">Currently suppressing missed flags for invoices issued before {{ sysset.go_live_date|date:'Y-m-d' }}.</span>
+            {% else %}<span class="muted" style="font-size:12px;">Not set — all eligible invoices flag missed.</span>{% endif %}
+        </div>
+        <div class="save-row">
+            {% if sysset.updated_at and sysset.go_live_date %}<span class="muted" style="font-size:12px; align-self:center;">Last changed {{ sysset.updated_at|timesince }} ago{% if sysset.updated_by %} by {{ sysset.updated_by }}{% endif %}</span>{% endif %}
+            <button type="submit" class="btn btn-primary">Save go-live date</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

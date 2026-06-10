@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - FSA Debtor System{% endblock %}
+
+{% block content %}
+<div class="page-card">
+    <h1 class="page-title">Welcome to the FSA Debtor System</h1>
+    <p class="page-subtitle">Debtor, aging and invoice reporting backed by a local SQL Server copy of your Xero data.</p>
+    <a class="btn btn-primary" href="{% url 'xero_dashboard' %}">Go to Dashboard</a>
+</div>
+
+<div class="page-card">
+    <h2>Xero Connection</h2>
+    <p class="muted">Connect or re-authorise the Xero account that feeds the hourly data sync.</p>
+    <a class="btn btn-secondary" href="{% url 'xero_login' %}">Connect to Xero</a>
+</div>
+{% endblock %}

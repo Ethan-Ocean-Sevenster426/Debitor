@@ -1,0 +1,102 @@
+{% load static %}{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outstanding Report - {{ company_name }}</title>
+    <style>
+        :root { --teal:#0E7C7B; --navy:rgb(30,41,59); }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1f2937; margin:0; padding:28px 36px; }
+        .report-head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--teal); padding-bottom:14px; }
+        .report-head img { height:46px; }
+        .report-head h1 { font-size:20px; margin:0; }
+        .report-head .meta { font-size:11px; color:#6b7280; text-align:right; }
+        .legal { font-size:11px; color:#6b7280; margin:8px 0 18px; }
+        h2 { font-size:14px; color:var(--navy); border-bottom:1px solid #e5e7eb; padding-bottom:5px; margin:22px 0 10px; }
+        .kv { display:grid; grid-template-columns:150px 1fr; gap:4px 12px; font-size:13px; }
+        .kv .k { color:#6b7280; font-weight:600; }
+        .summary-tiles { display:flex; gap:14px; margin:14px 0; flex-wrap:wrap; }
+        .tile { background:#f5fbfb; border:1px solid #d6efee; border-radius:8px; padding:10px 16px; }
+        .tile .l { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#5a8a8a; }
+        .tile .v { font-size:18px; font-weight:700; }
+        .inv-block { border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin-bottom:14px; page-break-inside:avoid; }
+        .inv-head { display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px; }
+        .inv-head .n { font-weight:700; }
+        table { width:100%; border-collapse:collapse; font-size:12px; }
+        th { background:#f1f5f5; text-align:left; padding:6px 8px; color:#5a8a8a; text-transform:uppercase; font-size:10px; letter-spacing:.4px; }
+        td { padding:6px 8px; border-bottom:1px solid #eef2f2; vertical-align:top; }
+        .tag { display:inline-block; padding:1px 7px; border-radius:9px; font-size:10px; font-weight:600; }
+        .tag.email { background:#e0f2f2; color:#065f5e; } .tag.comment { background:#fff4e5; color:#b45309; }
+        .att a { display:block; font-size:10.5px; }
+        .toolbar { margin:18px 0; }
+        .btn { background:var(--teal); color:#fff; border:none; padding:9px 18px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; }
+        .muted { color:#9ca3af; }
+        @media print { .toolbar { display:none; } body { padding:0; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button>
+        <a class="btn" style="background:#6b7280;" href="{% url 'xero_aging_report' %}">&larr; Back</a>
+    </div>
+
+    <div class="report-head">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <img src="{% static 'img/fsa-logo.png' %}" alt="FSA">
+            <div><h1>Outstanding Invoices Report</h1>
+                <div class="muted" style="font-size:12px;">{{ tenant_name }}</div></div>
+        </div>
+        <div class="meta">Generated {{ generated_at|date:"Y-m-d H:i" }}<br>by {{ generated_by }}</div>
+    </div>
+    <p class="legal">System-generated statement of all outstanding invoices for the debtor below, including the full communication and activity lifecycle of each invoice, produced from the FSA Debtor System.</p>
+
+    <h2>{{ company_name }}</h2>
+    <div class="kv">
+        {% if project_code %}<div class="k">Project</div><div>{{ project_code }}</div>{% endif %}
+        {% if contact %}
+        <div class="k">Account #</div><div>{{ contact.account_number|default:"&mdash;" }}</div>
+        <div class="k">Email</div><div>{{ contact.email|default:"&mdash;" }}</div>
+        {% for p in contact.phones %}<div class="k">{{ p.type }} phone</div><div>{{ p.number }}</div>{% endfor %}
+        {% for a in contact.addresses %}<div class="k">{{ a.type }} address</div><div>{{ a.lines|join:", " }}</div>{% endfor %}
+        {% endif %}
+        {% if allocated_to %}<div class="k">Allocated to</div><div>{{ allocated_to }}</div>{% endif %}
+    </div>
+
+    <div class="summary-tiles">
+        <div class="tile"><div class="l">Outstanding invoices</div><div class="v">{{ invoice_count }}</div></div>
+        <div class="tile"><div class="l">Total outstanding</div><div class="v">R&nbsp;{{ total|floatformat:2|intcomma }}</div></div>
+    </div>
+
+    <h2>Invoices &amp; lifecycles</h2>
+    {% for item in invoices %}
+    <div class="inv-block">
+        <div class="inv-head">
+            <span class="n">{{ item.inv.invoice_number }}{% if item.inv.project_code %} &middot; <span class="muted">{{ item.inv.project_code }}</span>{% endif %}{% if item.inv.inspector %} &middot; <span class="muted">Inspector: {{ item.inv.inspector }}</span>{% endif %}{% if item.inv.invoice_id %} &middot; <a href="{% url 'xero_invoice_online' item.inv.invoice_id %}" target="_blank" rel="noopener">View online</a>{% endif %}</span>
+            <span>Due {{ item.inv.due_date|date:"Y-m-d"|default:"&mdash;" }}
+                {% if item.inv.days_past_due > 0 %}&middot; {{ item.inv.days_past_due }} days overdue{% endif %}
+                &middot; Outstanding <strong>R&nbsp;{{ item.inv.amount_due|floatformat:2|intcomma }}</strong></span>
+        </div>
+        {% if item.events %}
+        <table>
+            <thead><tr><th style="width:120px;">Date</th><th style="width:80px;">Type</th><th>Detail</th><th style="width:120px;">By</th></tr></thead>
+            <tbody>
+                {% for e in item.events %}
+                <tr>
+                    <td>{{ e.date }}</td>
+                    <td>{% if e.is_comment %}<span class="tag comment">Comment</span>{% elif e.is_email %}<span class="tag email">Email</span>{% else %}{{ e.action }}{% endif %}</td>
+                    <td>{% if e.is_comment %}{{ e.details }}{% else %}<strong>{{ e.action }}</strong>{% if e.details %} — {{ e.details }}{% endif %}{% endif %}
+                        {% if e.attachments %}<div class="att">{% for a in e.attachments %}<a href="{{ a.url }}">&#128206; {{ a.name }}</a>{% endfor %}</div>{% endif %}</td>
+                    <td>{{ e.user }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}<p class="muted" style="font-size:12px; margin:0;">No lifecycle events recorded.</p>{% endif %}
+    </div>
+    {% empty %}
+    <p class="muted">No outstanding invoices for this company.</p>
+    {% endfor %}
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - FSA Debtor System{% endblock %}
+
+{% block content %}
+<div class="page-card" style="max-width:560px;">
+    <div class="flex-between">
+        <h1 class="page-title">{{ title }}</h1>
+        <a class="btn btn-secondary btn-sm" href="{% url 'user_list' %}">&larr; Back</a>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-error">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="muted" style="font-size:12px; margin-top:4px;">{{ field.help_text|safe }}</div>{% endif %}
+            {% for error in field.errors %}<div class="alert alert-error" style="margin-top:6px;">{{ error }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+    </form>
+</div>
+{% endblock %}

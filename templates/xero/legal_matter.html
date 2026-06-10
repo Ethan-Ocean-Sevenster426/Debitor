@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}{{ matter.contact_name|default:matter.contact_id }} - Legal Workflow{% endblock %}
+{% block extra_head %}
+<style>
+    .lw-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+    .lw-status { padding: 2px 10px; border-radius: 12px; font-size: 11.5px; font-weight: 700; }
+    .lw-status.pending { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+    .lw-status.active { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .lw-status.closed { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .route-bar { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin: 14px 0; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+    .route-bar .rb-label { font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .4px; }
+    .route-bar form { display: inline; }
+    .pill-btn { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 16px; padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .pill-btn.on { background: var(--brand-teal, #0E7C7B); color: #fff; border-color: var(--brand-teal, #0E7C7B); }
+    .opp-toggle .pill-btn.on.opp { background: #b91c1c; border-color: #b91c1c; }
+    .wf-section { margin-top: 22px; }
+    .wf-section h2 { font-size: 15px; color: var(--navy); margin: 0; }
+    .sec-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid #eef2f7; padding-bottom: 6px; margin-bottom: 10px; }
+    .sec-head form { margin-left: auto; }
+    .branch-tag { font-size: 11.5px; font-weight: 700; color: #166534; background: #dcfce7; border: 1px solid #86efac; border-radius: 12px; padding: 1px 9px; vertical-align: middle; }
+    .branch-tag.opp { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+    .wf-step { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; }
+    .wf-step.done { background: #f6fdf9; border-color: #bbf7d0; }
+    .wf-step.variation { background: #fffaf0; border-color: #fde9c8; }
+    .ws-head { display: flex; align-items: flex-start; gap: 10px; }
+    .ws-check { margin-top: 2px; }
+    .ws-label { font-size: 14px; color: #1f2937; font-weight: 600; }
+    .ws-done-meta { font-size: 11.5px; color: #16a34a; margin-left: 8px; font-weight: 600; }
+    .ws-var-tag { font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 1px 8px; margin-left: 8px; }
+    .ws-comments { margin: 8px 0 0 30px; }
+    .ws-comment { font-size: 13px; color: #334155; padding: 6px 0; border-top: 1px dashed #eef2f7; }
+    .ws-comment .who { color: #64748b; font-size: 11.5px; }
+    .ws-add { margin: 8px 0 0 30px; display: flex; gap: 8px; align-items: flex-start; }
+    .ws-add textarea { flex: 1; min-height: 38px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 13px; resize: vertical; }
+    .muted-sm { color: #94a3b8; font-size: 12px; }
+    /* The company's outstanding invoices + their comments. */
+    .inv-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; margin: 14px 0; background: #fff; }
+    .inv-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .inv-toggle { background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--navy); padding: 4px 0; }
+    .inv-toggle.open { color: var(--brand-teal, #0E7C7B); }
+    .inv-head .btn { margin-left: auto; }
+    .inv-body { display: none; margin-top: 10px; }
+    .inv-body.open { display: block; }
+    .inv-row { border-top: 1px solid #eef2f7; padding: 10px 0; }
+    .inv-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .inv-num { font-weight: 700; color: #1f2937; }
+    .inv-meta { color: #64748b; font-size: 12.5px; }
+    .inv-amt { margin-left: auto; font-weight: 700; color: #0f172a; }
+    .inv-events { list-style: none; margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid #eef2f7; }
+    .inv-events li { font-size: 12.5px; color: #475569; padding: 3px 0; }
+    .inv-events li.c { color: #1f2937; }
+    .inv-events li.m { color: #1e40af; }
+    .inv-events .ev-date { color: #94a3b8; margin-right: 6px; }
+    .inv-events .ev-action { font-weight: 600; }
+    .inv-events .ev-user { color: #94a3b8; }
+    .ws-att { margin-top: 4px; }
+    .ws-att a { display: inline-block; margin-right: 10px; font-size: 12px; color: #1e40af; text-decoration: none; }
+    .ws-att a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <div class="lw-head">
+            <h1 class="page-title" style="margin:0;">{{ matter.contact_name|default:matter.contact_id }}</h1>
+            <span class="lw-status {{ matter.status }}">{{ matter.get_status_display }}</span>
+        </div>
+        <div style="display:flex; gap:8px;">
+            {% if is_manager and matter.status == 'active' %}
+            <form method="post" action="{% url 'xero_legal_return' %}"
+                  onsubmit="return confirm('Bring {{ matter.contact_name|escapejs|default:matter.contact_id }} back from the lawyers? Use this once the courts have resolved the matter — it returns the company to normal management.');">
+                {% csrf_token %}
+                <input type="hidden" name="matter_id" value="{{ matter.id }}">
+                <input type="hidden" name="next" value="{% url 'xero_legal_matter' matter.id %}">
+                <button type="submit" class="btn btn-secondary btn-sm" style="background:#ecfdf5; color:#065f46; border-color:#a7f3d0;">&#8617; Bring back from lawyers</button>
+            </form>
+            {% endif %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_legal' %}">&larr; All matters</a>
+        </div>
+    </div>
+    <p class="page-subtitle">LBINC // FSA collection workflow. {% if can_work %}Tick steps as you complete them and add a comment on any step. Switch between Unopposed and Opposed if the debtor changes strategy.{% else %}Read-only &mdash; only the attorneys can update this matter.{% endif %}</p>
+
+    {# ---- The company's outstanding invoices + their comments (moved over with the handover) ---- #}
+    <div class="inv-card">
+        <div class="inv-head">
+            <button type="button" class="inv-toggle" onclick="document.getElementById('inv-body').classList.toggle('open'); this.classList.toggle('open');">
+                &#9656; Outstanding invoices &mdash; {{ company_invoice_count }} invoice{{ company_invoice_count|pluralize }}, R&nbsp;{{ company_total|floatformat:2|intcomma }} due</button>
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_company_report' %}?cid={{ report_cid|urlencode }}" target="_blank" rel="noopener">&#128196; Full company report</a>
+        </div>
+        <div class="inv-body" id="inv-body">
+            {% for row in company_invoices %}
+            <div class="inv-row">
+                <div class="inv-line">
+                    <span class="inv-num">{{ row.inv.invoice_number|default:"—" }}</span>
+                    <span class="inv-meta">Due {{ row.inv.due_date|date:"Y-m-d"|default:"—" }}{% if row.inv.days_past_due > 0 %} · {{ row.inv.days_past_due }} days overdue{% endif %} · {{ row.inv.status }}</span>
+                    <span class="inv-amt">R&nbsp;{{ row.inv.amount_due|floatformat:2|intcomma }}</span>
+                </div>
+                {% if row.events %}
+                <ul class="inv-events">
+                    {% for e in row.events %}
+                    <li class="{% if e.is_comment %}c{% elif e.is_email %}m{% endif %}">
+                        <span class="ev-date">{{ e.date }}</span>
+                        <span class="ev-action">{{ e.action }}</span>{% if e.details %} — {{ e.details }}{% endif %}{% if e.user %} <span class="ev-user">({{ e.user }})</span>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="muted-sm" style="margin-left:4px;">No comments or activity recorded.</div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <p class="muted">No outstanding invoices found for this company in the current snapshot.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <p class="muted" style="margin-top:0;">The matter runs in order: <strong>Collections</strong> → <strong>Summons</strong> → <strong>Application for payment</strong>. Each litigation stage has its own Unopposed / Opposed setting &mdash; switch it any time the debtor changes strategy.</p>
+
+    {# ---- Workflow sections (sequential) ---- #}
+    {% for sec in sections %}
+    <div class="wf-section">
+        <div class="sec-head">
+            <h2>{{ sec.title }}{% if sec.which %} <span class="branch-tag {% if sec.opposed %}opp{% endif %}">{% if sec.opposed %}Opposed / Defended{% else %}Unopposed{% endif %}</span>{% endif %}</h2>
+            {% if sec.which and can_work %}
+            <form method="post" action="{% url 'xero_legal_toggle_opposed' matter.id %}"
+                  onsubmit="return confirm('Switch {{ sec.title|escapejs }} to {% if sec.opposed %}Unopposed{% else %}Opposed{% endif %}? The steps for that branch will be shown (existing comments and ticks are kept).');">
+                {% csrf_token %}
+                <input type="hidden" name="which" value="{{ sec.which }}">
+                <button type="submit" class="pill-btn">&#8646; Switch to {% if sec.opposed %}Unopposed{% else %}Opposed{% endif %}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% for st in sec.steps %}
+        <div class="wf-step {% if st.done %}done{% endif %} {% if st.is_variation %}variation{% endif %}">
+            <div class="ws-head">
+                {% if not st.is_variation %}
+                    {% if can_work %}
+                    <form method="post" action="{% url 'xero_legal_step_toggle' matter.id %}" class="ws-check">
+                        {% csrf_token %}
+                        <input type="hidden" name="step_key" value="{{ st.key }}">
+                        <input type="checkbox" onchange="this.form.submit()" {% if st.done %}checked{% endif %}>
+                    </form>
+                    {% else %}
+                    <span class="ws-check">{% if st.done %}&#9745;{% else %}&#9744;{% endif %}</span>
+                    {% endif %}
+                {% endif %}
+                <div style="flex:1;">
+                    <span class="ws-label">{{ st.label }}</span>
+                    {% if st.is_variation %}<span class="ws-var-tag">Comment section</span>{% endif %}
+                    {% if st.done and st.done_by %}<span class="ws-done-meta">&#10003; {{ st.done_by }}{% if st.done_at %} · {{ st.done_at|date:"Y-m-d H:i" }}{% endif %}</span>{% endif %}
+
+                    {% if st.comments %}
+                    <div class="ws-comments">
+                        {% for c in st.comments %}
+                        <div class="ws-comment">{{ c.text|linebreaksbr }}
+                            {% if c.attachments.all %}<div class="ws-att">{% for a in c.attachments.all %}<a href="{{ a.file.url }}" target="_blank" rel="noopener">&#128206; {{ a.original_name|default:"document" }}</a>{% endfor %}</div>{% endif %}
+                            <div class="who">&mdash; {{ c.author_name|default:"—" }} · {{ c.created_at|date:"Y-m-d H:i" }}</div></div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if can_work %}
+                    <form method="post" action="{% url 'xero_legal_step_comment' matter.id %}" class="ws-add" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="step_key" value="{{ st.key }}">
+                        <div style="flex:1;">
+                            <textarea name="text" placeholder="{% if st.is_variation %}Describe the variation / update…{% else %}Add a comment…{% endif %}"></textarea>
+                            <div style="margin-top:5px;"><input type="file" name="documents" multiple title="Attach documents (pleadings, court orders, etc.)"></div>
+                        </div>
+                        <button type="submit" class="btn btn-secondary btn-sm">Comment</button>
+                    </form>
+                    {% elif not st.comments %}
+                    <div class="muted-sm" style="margin-left:30px;">No comments.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

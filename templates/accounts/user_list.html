@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}User Management - FSA Debtor System{% endblock %}
+
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <div>
+            <h1 class="page-title">User Management</h1>
+            <p class="page-subtitle mt-0">{{ users|length }} user{{ users|length|pluralize }}</p>
+        </div>
+        <a class="btn btn-primary" href="{% url 'user_create' %}">+ Add User</a>
+    </div>
+
+    <form method="get" class="filter-bar" style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+        <input type="text" name="q" value="{{ search }}" class="form-control" style="max-width:280px;"
+               placeholder="Search name or email">
+        <select name="role" class="form-control" style="width:auto;">
+            <option value="">All roles</option>
+            <option value="super_admin"{% if role_filter == 'super_admin' %} selected{% endif %}>Super Admin</option>
+            <option value="administrator"{% if role_filter == 'administrator' %} selected{% endif %}>Administrator</option>
+            <option value="inspector"{% if role_filter == 'inspector' %} selected{% endif %}>Inspector</option>
+        </select>
+        <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+        {% if search or role_filter %}<a href="{% url 'user_list' %}">Clear</a>{% endif %}
+    </form>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th class="text-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>{{ u.get_full_name|default:"—" }}</td>
+                <td>{{ u.email }}</td>
+                <td><span class="badge badge-{{ u.role }}">{{ u.get_role_display }}</span></td>
+                <td>
+                    {% if u.is_active %}
+                        <span class="badge badge-active">Active</span>
+                    {% else %}
+                        <span class="badge badge-inactive">Inactive</span>
+                    {% endif %}
+                </td>
+                <td class="text-right">
+                    <a class="btn btn-secondary btn-sm" href="{% url 'user_edit' u.pk %}">Edit</a>
+                    <a class="btn btn-secondary btn-sm" href="{% url 'user_reset_password' u.pk %}">Reset PW</a>
+                    {% if u != request.user %}
+                    <form method="post" action="{% url 'user_toggle_active' u.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-secondary btn-sm">{% if u.is_active %}Deactivate{% else %}Activate{% endif %}</button>
+                    </form>
+                    <form method="post" action="{% url 'user_delete' u.pk %}" style="display:inline;"
+                          onsubmit="return confirm('Delete {{ u.email|escapejs }}? This cannot be undone.');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="muted">No users found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

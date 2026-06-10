@@ -1,0 +1,14 @@
+{% load humanize %}
+{% if chart.has_data %}
+<svg class="line-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img">
+    <line class="axis" x1="26" y1="{{ chart.baseline }}" x2="{{ chart.width|add:-6 }}" y2="{{ chart.baseline }}"></line>
+    <polyline points="{{ chart.points }}" fill="none" stroke="#0E7C7B" stroke-width="2"
+              stroke-linejoin="round" stroke-linecap="round"></polyline>
+    {% for d in chart.dots %}
+    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="3" fill="#0E7C7B"><title>{{ d.label }}: R {{ d.amount|floatformat:2|intcomma }}</title></circle>
+    <text class="lbl" x="{{ d.x }}" y="{{ chart.baseline|add:14 }}" text-anchor="middle">{{ d.short }}</text>
+    {% endfor %}
+</svg>
+{% else %}
+<p class="muted">No dated outstanding invoices.</p>
+{% endif %}

@@ -1,0 +1,167 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FSA Debtor System — Super Admin Manual</title>
+    <style>
+        :root { --teal:#0E7C7B; --navy:rgb(30,41,59); }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1f2937; margin:0; padding:32px 48px; line-height:1.5; max-width:1000px; }
+        .report-head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--teal); padding-bottom:14px; margin-bottom:18px; }
+        .report-head img { height:50px; }
+        h1 { font-size:24px; margin:0; }
+        h2 { font-size:18px; color:var(--navy); border-bottom:1px solid #e5e7eb; padding-bottom:6px; margin:28px 0 10px; }
+        h3 { font-size:15px; color:var(--teal); margin:18px 0 6px; }
+        p, li { font-size:14px; }
+        ul, ol { margin:6px 0 6px 0; padding-left:22px; }
+        li { margin-bottom:4px; }
+        code { background:#f1f5f5; padding:1px 5px; border-radius:4px; font-size:13px; }
+        .tag { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+        .tag.teal { background:#e0f2f2; color:#065f5e; } .tag.amber { background:#fff4e5; color:#b45309; }
+        .tag.red { background:#fee2e2; color:#991b1b; } .tag.navy { background:#e5e9f0; color:var(--navy); }
+        table { width:100%; border-collapse:collapse; font-size:13px; margin:8px 0; }
+        th { background:#f1f5f5; text-align:left; padding:7px 9px; border-bottom:2px solid #d6efee; }
+        td { padding:7px 9px; border-bottom:1px solid #eef2f2; vertical-align:top; }
+        .toc { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px 20px; }
+        .toc a { color:var(--teal); text-decoration:none; }
+        .note { background:#f5fbfb; border-left:4px solid var(--teal); padding:10px 14px; margin:10px 0; font-size:13.5px; }
+        .toolbar { margin:16px 0 22px; }
+        .btn { background:var(--teal); color:#fff; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; }
+        @media print { .toolbar { display:none; } body { padding:0; max-width:none; } a { color:inherit; text-decoration:none; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button class="btn" onclick="window.print()">&#128424; Print / Save as PDF</button>
+        <a class="btn" style="background:#6b7280;" href="{% url 'xero_dashboard' %}">&larr; Back to app</a>
+    </div>
+
+    <div class="report-head">
+        <div style="display:flex; align-items:center; gap:16px;">
+            <img src="{% static 'img/fsa-logo.png' %}" alt="FSA">
+            <div><h1>FSA Debtor System</h1><div style="color:#6b7280; font-size:13px;">Super Admin User Manual</div></div>
+        </div>
+        <div style="font-size:11px; color:#9ca3af; text-align:right;">Generated {{ generated_at|date:"Y-m-d" }}</div>
+    </div>
+
+    <div class="toc">
+        <strong>Contents</strong>
+        <ol>
+            <li><a href="#overview">What the system does</a></li>
+            <li><a href="#roles">Roles &amp; who sees what</a></li>
+            <li><a href="#login">Logging in</a></li>
+            <li><a href="#sync">Where the data comes from (Xero sync)</a></li>
+            <li><a href="#dashboard">The Dashboard</a></li>
+            <li><a href="#allocate">Allocating companies to administrators</a></li>
+            <li><a href="#action">The Debtors Action Page</a></li>
+            <li><a href="#cadence">Reminder cadence, calls &amp; missed calls</a></li>
+            <li><a href="#lifecycle">Invoice lifecycle, comments &amp; documents</a></li>
+            <li><a href="#closed">Closing &amp; reopening debtors</a></li>
+            <li><a href="#reports">Reports (legal / collections)</a></li>
+            <li><a href="#users">Managing users</a></li>
+        </ol>
+    </div>
+
+    <h2 id="overview">1. What the system does</h2>
+    <p>The FSA Debtor System gives the finance team a fast, local view of who owes the business money, splits that work between administrators, and keeps a complete record of every reminder and follow-up call on each invoice — ready to print for collections or legal use.</p>
+    <p>Invoice data is copied from <strong>Xero</strong> into a local SQL Server database on a schedule, so the pages load instantly and don't depend on Xero being reachable. <strong>The app never sends reminders</strong> — Xero sends those; the app reflects them and lets your team act on them.</p>
+
+    <h2 id="roles">2. Roles &amp; who sees what</h2>
+    <table>
+        <tr><th>Role</th><th>Sees</th><th>Can do</th></tr>
+        <tr><td><span class="tag navy">Super Admin</span></td><td>Everything — all debtors, all administrators, the lawyers' matters, system-wide figures and the filing archive.</td><td><strong>Everything.</strong> Manage users; allocate companies; close/reopen debtors; write off invoices; set handover rules &amp; mark for handover; send companies to the lawyers, <em>approve</em> them and bring them back; Communication Setup; Schedule &amp; go-live date; Filing. Plus all collections actions.</td></tr>
+        <tr><td><span class="tag teal">Administrator</span></td><td>Only the companies allocated to them (and the Lawyers page, read-only, for oversight).</td><td><strong>Collections only.</strong> Log calls / WhatsApps / emails; add comments &amp; upload documents; set a debtor's follow-up cadence shift (payment arrangements); run reports. <em>Cannot</em> close debtors, write off, handover, send to / approve lawyers, allocate, or open Filing / Users / Schedule / Communication Setup.</td></tr>
+        <tr><td><span class="tag amber">Lawyer</span></td><td>Only the <strong>Lawyers</strong> page — the approved matters assigned to them and their progress.</td><td>Work the LBINC legal workflow: tick steps, comment on any step and <strong>upload documents</strong>, switch a route between Unopposed / Opposed. Cannot see the debtor, dashboard, handover or filing pages.</td></tr>
+        <tr><td><span class="tag amber">Inspector</span></td><td>Reserved role (no access by default).</td><td>Reserved — permissions to be defined as needed.</td></tr>
+    </table>
+    <div class="note"><strong>Key rule:</strong> only a <strong>Super Admin</strong> can close debtors, write off invoices, send companies to the lawyers and <em>approve</em> them. Administrators focus purely on collecting (call / WhatsApp / email). Lawyers only ever see their own legal workflow page. Closed businesses are excluded from the dashboard totals and the open list, so the figures always reflect money still being actively collected.</div>
+
+    <h2 id="login">3. Logging in</h2>
+    <ul>
+        <li>Go to the app URL and sign in with your email address and password.</li>
+        <li>Change your password after first login (Users page → your account → Reset password).</li>
+        <li>Use <strong>Logout</strong> (top-right) when finished.</li>
+    </ul>
+
+    <h2 id="sync">4. Where the data comes from (Xero sync)</h2>
+    <ul>
+        <li>A scheduled job pulls open invoices from Xero <strong>every hour</strong> into the local database.</li>
+        <li>The <strong>Refresh now</strong> button on the Debtors Action Page triggers a sync immediately.</li>
+        <li>Xero allows ~5,000 API calls per day. If that limit is reached, the sync pauses cleanly and resumes automatically once the limit resets (overnight) — no action needed.</li>
+    </ul>
+
+    <h2 id="dashboard">5. The Dashboard</h2>
+    <h3>As a Super Admin you see:</h3>
+    <ul>
+        <li><strong>System Overview</strong> — total outstanding (closed businesses excluded), number of debtors, and clickable scorecards: <span class="tag amber">Calls required</span>, <span class="tag red">Missed calls</span>, At final demand, At handover, and unallocated companies. Clicking a scorecard opens the Debtors Action Page filtered to those invoices.</li>
+        <li><strong>Outstanding by invoice month</strong> — a line chart of how the outstanding book is spread across months.</li>
+        <li><strong>Invoices by age</strong> — a pie chart of how many invoices sit in each ageing band.</li>
+        <li><strong>Administrator Tracking</strong> — a table and bar chart showing clients allocated, outstanding, calls required, <strong>missed calls</strong>, final demand and handover counts per administrator, so you can see where everyone is tracking.</li>
+    </ul>
+    <h3>View an administrator's workload</h3>
+    <p>Use the <strong>"View administrator"</strong> dropdown at the top of the dashboard (or click an administrator's name in the tracking table). The dashboard then shows <em>that person's</em> outstanding, call list, missed calls and charts — exactly what they still need to phone and collect. Choose "— Whole system —" to return.</p>
+
+    <h2 id="allocate">6. Allocating companies to administrators</h2>
+    <ul>
+        <li>On the Debtors Action Page, each company row has an <strong>"Allocated to"</strong> dropdown. Pick an administrator to assign that company; pick "Unallocated" to clear it.</li>
+        <li>Administrators only see (and are measured on) the companies allocated to them.</li>
+        <li>Allocations survive the hourly Xero sync.</li>
+    </ul>
+
+    <h2 id="action">7. The Debtors Action Page</h2>
+    <ul>
+        <li><strong>Ageing tiles</strong> (Not Yet Due, 0-30, 31-60, 61-90, 91-120, 120+) double as filters — click one to show only that band. "Total Outstanding" clears the filter.</li>
+        <li><strong>Search</strong> by debtor name <em>or</em> invoice number.</li>
+        <li><strong>Administrator filter</strong> (Super Admin) — narrow the whole page to one administrator's book.</li>
+        <li><strong>Scorecard filters</strong> — arriving from a dashboard scorecard shows only Calls required / Missed / Final demand / Handover invoices.</li>
+        <li>Click a <strong>company row</strong> to expand it into a statement of its outstanding invoices, with the <strong>Contact details</strong> panel and a per-invoice <strong>Report</strong> link.</li>
+        <li>Each row shows <strong>who it's allocated to</strong>, a <span class="tag amber">&#128222; Call due</span> badge, and a <span class="tag red">&#9888; Missed call</span> badge where relevant.</li>
+        <li>Use the <strong>Report</strong> button (end of each row) for a full company statement. <strong>Mark closed</strong> (Super Admin only) closes a business.</li>
+    </ul>
+
+    <h2 id="cadence">8. Reminder cadence, calls &amp; missed calls</h2>
+    <p>Xero sends reminders on this cadence (reflected in each invoice's lifecycle):</p>
+    <ol>
+        <li>Due in 7 days</li><li>Due date</li><li>7 days after due date</li>
+        <li><strong>14 days after due date</strong> — administrator should phone the client</li>
+        <li><strong>21 days after due date</strong> — administrator should phone the client</li>
+        <li>60 days — Final demand</li><li>65 days — Action / handover process</li>
+    </ol>
+    <ul>
+        <li><strong>Call required:</strong> an invoice that has reached the 14/21-day reminder. Click <span class="tag amber">&#128222; Call</span> on the invoice — you'll be prompted to enter what was discussed; this logs the call and adds it to the invoice's lifecycle.</li>
+        <li>After logging a call, that invoice's prompt clears for 7 days so it drops off the to-do list (it stays on screen — you don't lose your place).</li>
+        <li><strong>Missed call:</strong> an invoice that reached the 21-day reminder with <em>no call ever logged</em> — flagged <span class="tag red">&#9888; Missed</span>. The Administrator Tracking table shows missed-call counts per administrator.</li>
+    </ul>
+
+    <h2 id="lifecycle">9. Invoice lifecycle, comments &amp; documents</h2>
+    <ul>
+        <li>Click any invoice in a company's statement to open its <strong>lifecycle</strong> — every reminder Xero sent, every call logged, and every comment, in date order.</li>
+        <li><strong>Add a comment</strong> with a date/time, free text, and one or more <strong>document uploads</strong> (proof of payment, correspondence, etc.). Comments become part of the lifecycle.</li>
+        <li>Comments and calls save without reloading the page, so you keep your place on the client.</li>
+    </ul>
+
+    <h2 id="closed">10. Closing &amp; reopening debtors</h2>
+    <ul>
+        <li><strong>Mark closed</strong> moves a business to the <strong>Closed Debtors</strong> page and removes its money from the dashboard totals and the open list.</li>
+        <li>On the Closed Debtors page, <strong>Reopen</strong> moves a business back to active collection.</li>
+    </ul>
+
+    <h2 id="reports">11. Reports (legal / collections)</h2>
+    <ul>
+        <li><strong>Single invoice report</strong> — the "Report" link on an invoice (or "Printable report" in its lifecycle) opens a print-ready record of that invoice and its full lifecycle.</li>
+        <li><strong>Company report</strong> — the "Report" button on a company row produces a statement of all its outstanding invoices, each with its lifecycle.</li>
+        <li>Use the browser's <strong>Print / Save as PDF</strong> to hand the report to a customer, attorney, or for your records.</li>
+    </ul>
+
+    <h2 id="users">12. Managing users</h2>
+    <ul>
+        <li>Open <strong>Users</strong> (top menu). Add a user with a name, email and role; set or reset passwords; deactivate users who leave.</li>
+        <li>Only Super Admins can manage users.</li>
+        <li>New administrators start with no companies — allocate companies to them on the Debtors Action Page.</li>
+    </ul>
+
+    <div class="note" style="margin-top:24px;">Questions or changes needed? Note the exact page and what you expected, and pass it to your system administrator.</div>
+</body>
+</html>

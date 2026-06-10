@@ -1,0 +1,15 @@
+# FSA Debtor System — Python dependencies
+# Install with:  pip install -r requirements.txt
+
+# --- Core application ---
+Django==6.0.3
+mssql-django==1.7.2          # SQL Server backend ('mssql' ENGINE)
+pyodbc==5.3.0                # ODBC driver bridge (needs the OS ODBC Driver 18)
+requests==2.34.2             # Xero API calls
+openpyxl==3.1.5              # Excel export
+python-dotenv==1.2.2         # loads the .env file
+tzdata==2025.3               # timezone data (Africa/Johannesburg)
+
+# --- Production WSGI server (Linux) ---
+# On Windows/IIS use wfastcgi instead of gunicorn.
+gunicorn==23.0.0

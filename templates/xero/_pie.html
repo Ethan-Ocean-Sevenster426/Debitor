@@ -1,0 +1,11 @@
+{% if pie.total %}
+<div class="pie" style="background: conic-gradient({{ pie.gradient }});"></div>
+<ul class="pie-legend">
+    {% for s in pie.legend %}
+    <li><span class="sw" style="background: {{ s.color }};"></span>{{ s.label }}
+        <span class="ct">{{ s.count }} ({{ s.pct|floatformat:0 }}%)</span></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No open invoices.</p>
+{% endif %}

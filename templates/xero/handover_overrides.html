@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Handover Rules - FSA Debtor System{% endblock %}
+{% block extra_head %}
+<style>
+    .excl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .excl-table th { background: var(--brand-teal, #0E7C7B); color: #fff; text-align: left; padding: 9px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+    .excl-table td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    .excl-table tr:nth-child(even) td { background: #f8fafb; }
+    .excl-note { color: #6b7280; font-size: 12px; }
+    .rule-pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+    .rule-pill.days { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .rule-pill.never { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+    .restore-btn { background: #fff; color: var(--brand-teal, #0E7C7B); border: 1px solid #b8e0de; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .restore-btn:hover { background: var(--brand-teal, #0E7C7B); color: #fff; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <h1 class="page-title">Handover Rules</h1>
+        <div style="display:flex; gap:8px;">
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_handover' %}">&larr; Handover</a>
+        </div>
+    </div>
+    <p class="page-subtitle">Debtors with a custom auto-handover rule that overrides the system default of <strong>{{ default_handover_days }} days</strong> past due. Set a debtor's rule by expanding it on the Debtors Action or Handover page and clicking &#9881; <em>Handover rule</em>.</p>
+
+    {% if overrides %}
+    <table class="excl-table">
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Rule</th>
+                <th>Reason</th>
+                <th>Set by</th>
+                <th>Since</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in overrides %}
+            <tr>
+                <td><strong>{{ o.contact_name|default:o.contact_id }}</strong></td>
+                <td>
+                    {% if o.auto_handover %}<span class="rule-pill days">Auto at {{ o.handover_days }} days</span>
+                    {% else %}<span class="rule-pill never">Never auto-hand over</span>{% endif %}
+                </td>
+                <td class="excl-note">{{ o.note|default:"&mdash;" }}</td>
+                <td>{{ o.set_by }}</td>
+                <td>{{ o.set_at|date:"Y-m-d H:i" }} <span class="muted">({{ o.set_at|timesince }} ago)</span></td>
+                <td style="text-align:right;">
+                    <form method="post" action="{% url 'xero_handover_settings' %}" style="display:inline;"
+                          onsubmit="return confirm('Reset {{ o.contact_name|escapejs|default:o.contact_id }} to the default handover rule ({{ default_handover_days }} days)?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="contact_id" value="{{ o.contact_id }}">
+                        <input type="hidden" name="contact_name" value="{{ o.contact_name }}">
+                        <input type="hidden" name="mode" value="default">
+                        <input type="hidden" name="next" value="{% url 'xero_handover_overrides' %}">
+                        <button type="submit" class="restore-btn">&#8634; Reset to default</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No debtors have a custom handover rule yet. Everyone uses the default of {{ default_handover_days }} days past due.</p>
+    {% endif %}
+</div>
+{% endblock %}

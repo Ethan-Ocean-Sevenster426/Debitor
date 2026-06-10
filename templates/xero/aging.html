@@ -1,0 +1,869 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Debtors Action Page - FSA Debtor System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stale { color: #c80; font-weight: 600; }
+    .ok { color: #16a34a; font-weight: 600; }
+    .failed { color: var(--brand-red); font-weight: 600; }
+    .filter-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 10px; }
+    .summary { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin: 8px 0 22px; }
+    .summary a.tile { background: #f5fbfb; border: 1px solid #d6efee; border-radius: 8px; padding: 14px 16px; text-decoration: none; color: inherit; display: block; transition: box-shadow 0.15s, transform 0.1s; }
+    .summary a.tile:hover { box-shadow: 0 4px 14px rgba(14,124,123,0.18); transform: translateY(-1px); }
+    .summary a.tile.active { outline: 3px solid var(--brand-teal); outline-offset: -2px; }
+    .summary a.tile.total { background: var(--brand-teal); border-color: var(--brand-teal); color: #fff; }
+    .summary a.tile.total.active { outline-color: #0a5f5e; }
+    .summary .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #5a8a8a; }
+    .summary .tile.total .label { color: #d6f1f0; }
+    .summary .amount { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .summary .meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .summary .tile.total .meta { color: #e3f6f5; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: 'Consolas', monospace; }
+    /* keep numeric headers right-aligned over their values (override the base left-aligned th) */
+    .data-table th.num, .data-table td.num { text-align: right; }
+    .data-table th { vertical-align: bottom; }
+    .data-table td { vertical-align: top; }
+    .data-table tr.totals td { background: #f0f8f7; font-weight: 700; border-top: 2px solid var(--brand-teal); }
+    .alloc-line { margin-top: 3px; font-size: 12px; }
+    .alloc-label { color: var(--text-muted); font-weight: 600; margin-right: 4px; }
+    .alloc-form { display: inline; }
+    .alloc-select { font-size: 12px; padding: 2px 6px; border: 1px solid #d1d5db; border-radius: 5px; background: #fff; max-width: 220px; }
+    .alloc-name { font-weight: 600; color: var(--brand-teal); }
+    .alloc-name.unalloc { color: var(--text-muted); font-weight: 400; font-style: italic; }
+    .zero { color: #bbb; }
+    .contact { font-weight: 600; }
+    .email { color: #888; font-size: 12px; }
+    .databox { background: #f5fbfb; border: 1px solid #d6efee; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; }
+
+    .debtor-row { cursor: pointer; }
+    .debtor-row:hover td { background: #f0f8f7; }
+    /* Zebra striping for readability. The tbody alternates debtor-row + debtor-detail
+       pairs, so every 4n+3 child is the start of the next debtor (stripe). Same trick
+       for the invoice statement (inv-row + optional history-row pairs). Hover keeps its colour. */
+    .data-table tbody > tr.debtor-row:nth-child(4n+3):not(:hover) > td { background: #f5f8f8; }
+    .statement tbody > tr.inv-row:nth-child(4n+3):not(:hover) > td { background: #f7fafa; }
+    .caret { display: inline-block; width: 14px; color: var(--brand-teal); font-size: 11px; transition: transform 0.15s; }
+    .debtor-row.open .caret { transform: rotate(90deg); }
+    .invcount { color: var(--text-muted); font-size: 11px; font-weight: 400; }
+    .call-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff4e5; color: #b45309; border: 1px solid #f5cd8f; }
+    .call-badge.sm { padding: 0 5px; margin-left: 4px; }
+    .call-now-btn { margin-left: 6px; padding: 1px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff4e5; color: #b45309; border: 1px solid #f5cd8f; cursor: pointer; }
+    .call-now-btn:hover { background: #b45309; color: #fff; }
+    /* WhatsApp inline action button next to the Status text — same shape as Call. */
+    .wa-btn { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #166534; border: 1px solid #86efac; text-decoration: none; white-space: nowrap; }
+    .wa-btn:hover { background: #16a34a; color: #fff; text-decoration: none; }
+    /* Email inline action button — same shape as Call/WhatsApp, blue family. */
+    .email-btn { display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #e0effe; color: #1e40af; border: 1px solid #93c5fd; text-decoration: none; white-space: nowrap; }
+    .email-btn:hover { background: #1d4ed8; color: #fff; text-decoration: none; }
+    .email-btn.disabled { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; }
+    .email-btn.disabled:hover { background: #f1f5f9; color: #94a3b8; }
+    /* Tiny ✕ to undo an accidental Call/WhatsApp/Email mark. */
+    .undo-link { margin-left: 4px; color: #94a3b8; text-decoration: none; font-weight: 700; }
+    .undo-link:hover { color: #b91c1c; text-decoration: none; }
+    .row-menu .row-menu-item.email { color: #1e40af; }
+    .row-menu .row-menu-item.email:hover { background: #e0effe; }
+    /* Template picker popup: appears when a WhatsApp/Email button with several
+       templates is clicked. The button itself keeps the wa-btn / email-btn look. */
+    .tpl-box { position: relative; display: inline-block; margin-left: 6px; vertical-align: middle; }
+    .tpl-box .wa-btn, .tpl-box .email-btn { margin-left: 0; cursor: pointer; }
+    .tpl-pop { display: none; position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; min-width: 170px;
+               background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 6px 18px rgba(15,23,42,.14); padding: 4px; }
+    .tpl-pop.open { display: block; }
+    .tpl-pop a { display: block; padding: 6px 10px; font-size: 12.5px; color: #334155; text-decoration: none; border-radius: 6px; white-space: nowrap; }
+    .tpl-pop a:hover { background: #f1f5f9; color: #0f172a; text-decoration: none; }
+    /* Per-debtor auto-handover rule form (statement toolbar). */
+    .handover-settings-form { margin: 8px 0 0; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; max-width: 460px; }
+    .handover-settings-form .hs-title { font-weight: 700; color: var(--navy); font-size: 13px; margin-bottom: 8px; }
+    .handover-settings-form .hs-opt { display: block; font-size: 13px; color: #334155; margin: 5px 0; }
+    .handover-settings-form .hs-days { width: 64px; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    .handover-settings-form .hs-actions { margin-top: 10px; display: flex; gap: 8px; }
+    /* Legal/lawyer status chips in the statement toolbar. */
+    .legal-chip { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+    .legal-chip.pending { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+    .legal-chip.active { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .legal-chip.closed { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    /* Debtor-level "WhatsApp" indicator in the Status column — same family as Missed/Call. */
+    .wa-status-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #dcfce7; color: #166534; border: 1px solid #86efac; white-space: nowrap; }
+    /* Per-row actions live behind a single kebab so the table isn't busy with buttons.
+       The trigger is quiet by default; the menu pops below-right of the row's cell. */
+    .row-actions { position: relative; text-align: right; }
+    .row-menu-btn { background: transparent; border: 1px solid transparent; border-radius: 50%;
+        width: 28px; height: 28px; padding: 0; font-size: 18px; line-height: 1; color: #6b7280; cursor: pointer; }
+    .row-menu-btn:hover, .row-menu-btn.open { background: #f1f5f5; color: var(--navy); border-color: #e2e8f0; }
+    .row-menu { position: absolute; right: 6px; top: 100%; z-index: 40; min-width: 170px;
+        background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 4px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, .14); display: none; }
+    .row-menu[data-open="true"] { display: block; }
+    .row-menu a, .row-menu .row-menu-item { display: block; width: 100%; box-sizing: border-box;
+        text-align: left; background: transparent; border: none; padding: 7px 10px; font-size: 12px;
+        font-weight: 600; color: var(--navy); cursor: pointer; border-radius: 6px; text-decoration: none;
+        white-space: nowrap; font-family: inherit; }
+    .row-menu a:hover, .row-menu .row-menu-item:hover { background: #f1f5f5; }
+    .row-menu .row-menu-item.write-off { color: #b91c1c; }
+    .row-menu .row-menu-item.write-off:hover { background: #fef2f2; }
+    .row-menu .row-menu-item.moveback { color: #047857; }
+    .row-menu .row-menu-item.moveback:hover { background: #ecfdf5; }
+    .row-menu .row-menu-item.handover { color: #9a3412; }
+    .row-menu .row-menu-item.handover:hover { background: #fff7ed; }
+    .row-menu .row-menu-item.activate { color: #1d4ed8; }
+    .row-menu .row-menu-item.activate:hover { background: #eff6ff; }
+    .row-menu .row-menu-item.deactivate { color: #7c2d12; }
+    .row-menu .row-menu-item.deactivate:hover { background: #fff7ed; }
+    .row-menu .row-menu-item.disabled { color: #9ca3af; cursor: not-allowed; }
+    .row-menu .row-menu-item.disabled:hover { background: transparent; }
+    .row-menu .row-menu-item.whatsapp { color: #166534; }
+    .row-menu .row-menu-item.whatsapp:hover { background: #dcfce7; }
+    .row-menu form { margin: 0; }
+    /* Handover-state badges shown next to the bucket cell on the Handover page. */
+    .ho-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
+    .ho-badge.activated { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .ho-badge.marked    { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
+    .ho-badge.auto      { background: #f3f4f6; color: #475569; border: 1px solid #d1d5db; }
+    .hd-summary { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .hd-summary.partial { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+    .hd-summary.none { background: #f3f4f6; color: #475569; border-color: #d1d5db; }
+    /* Per-debtor Status column: badges stack vertically and align on the same axis. */
+    .data-table td.status-cell { width: 200px; vertical-align: middle; }
+    .status-cell > span { display: inline-block; margin: 2px 0; margin-left: 0; }
+    /* Write-off reason modal */
+    .wo-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .55); display: none; z-index: 200; align-items: center; justify-content: center; }
+    .wo-backdrop.open { display: flex; }
+    .wo-card { background: #fff; border-radius: 10px; padding: 22px 24px; width: 480px; max-width: calc(100% - 32px); box-shadow: 0 16px 40px rgba(0, 0, 0, .25); }
+    .wo-card h3 { margin: 0 0 6px; font-size: 17px; color: var(--navy); }
+    .wo-card .sub { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+    .wo-card label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    .wo-card textarea { width: 100%; min-height: 100px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; font-size: 13px; resize: vertical; }
+    .wo-card .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+    .wo-card .err { color: var(--brand-red); font-size: 12px; min-height: 16px; margin-top: 4px; }
+    .called-tag { margin-left: 6px; font-size: 11px; color: #16a34a; font-weight: 600; }
+    .missed-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #991b1b; border: 1px solid #f3c2c7; }
+    .missed-badge.sm { padding: 0 6px; }
+    .debtor-search { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .report-link { margin-left: 8px; font-size: 11px; font-weight: 600; }
+    .action-cell { text-align: right; white-space: nowrap; }
+    .debtor-action { display: inline; }
+    .debtor-action-btn { border: 1px solid; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .debtor-action-btn.close { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
+    .debtor-action-btn.close:hover { background: var(--brand-red-dark); border-color: var(--brand-red-dark); }
+    .debtor-action-btn.reopen { background: #fff; color: var(--brand-teal); border-color: #b8e0de; }
+    .debtor-action-btn.reopen:hover { background: var(--brand-teal); color: #fff; }
+    .debtor-action-btn.report { background: #fff; color: var(--navy); border-color: #cbd5e1; text-decoration: none; display: inline-block; margin-right: 4px; }
+    .debtor-action-btn.report:hover { background: var(--navy); color: #fff; text-decoration: none; }
+    .stmt-report { font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .debtor-detail > td { background: #fbfdfd !important; padding: 0 0 0 28px; border-bottom: 2px solid #e5e7eb; }
+    .statement { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 12.5px; }
+    .statement th { background: #eef6f6; color: #5a8a8a; text-transform: uppercase; letter-spacing: 0.4px; font-size: 11px; padding: 6px 10px; text-align: left; }
+    .statement td { padding: 6px 10px; border-bottom: 1px solid #eef2f2; }
+    .statement tr:last-child td { border-bottom: none; }
+    .bucket-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: #e0f2f2; color: #065f5e; }
+    .bucket-tag.over { background: #fee2e2; color: #991b1b; }
+
+    .inv-row.clickable { cursor: pointer; }
+    .inv-row.clickable:hover td { background: #eef6f6; }
+    .inv-caret { font-size: 9px; width: 12px; }
+    .inv-row.open .inv-caret { transform: rotate(90deg); }
+    .history-row > td { background: #f7fbfb !important; padding: 4px 14px 10px 28px; }
+    .timeline-wrap { padding: 6px 0; }
+    .timeline-note { font-size: 11.5px; margin-bottom: 6px; }
+    .timeline { list-style: none; margin: 0; padding: 0; border-left: 2px solid #d6efee; }
+    .timeline li { position: relative; padding: 5px 0 5px 18px; font-size: 12.5px; }
+    .timeline li::before { content: ''; position: absolute; left: -6px; top: 9px; width: 9px; height: 9px; border-radius: 50%; background: #b7d8d6; }
+    .timeline li.email::before { background: var(--brand-teal); }
+    .timeline .t-date { color: var(--text-muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+    .timeline .t-action { font-weight: 700; }
+    .timeline .t-action.email { color: var(--brand-teal); }
+    .timeline .t-user { color: #999; font-size: 11.5px; }
+    .refresh-hist { font-size: 11.5px; margin-left: 6px; }
+    .timeline li.comment::before { background: #d97706; }
+    .t-action.comment { color: #b45309; }
+    .c-text { margin: 3px 0 0; white-space: pre-wrap; }
+    .c-att { margin-top: 4px; }
+    .c-att a { margin-right: 10px; font-size: 11.5px; }
+    .comment-form { margin-top: 12px; padding: 12px 14px; background: #f7fbfb; border: 1px solid #e0efee; border-radius: 8px; max-width: 580px; }
+    .cf-title { font-weight: 700; font-size: 12.5px; margin-bottom: 8px; }
+    .cf-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
+    .cf-row label { width: 120px; flex: none; color: var(--text-muted); font-weight: 600; }
+    .comment-form textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 13px; font-family: inherit; margin-bottom: 8px; box-sizing: border-box; }
+    .comment-form input[type=datetime-local] { padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12.5px; }
+    .cf-actions { display: flex; align-items: center; gap: 10px; }
+
+    .detail-toolbar { margin: 4px 0 8px; }
+    .contact-btn { background: #eef6f6; border: 1px solid #d6efee; color: var(--brand-teal); border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .contact-btn:hover, .contact-btn.open { background: var(--brand-teal); color: #fff; }
+    .contact-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; max-width: 680px; }
+    .cd-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+    .cd-row { display: flex; gap: 14px; padding: 3px 0; font-size: 12.5px; align-items: flex-start; }
+    .cd-label { width: 130px; flex: none; color: var(--text-muted); font-weight: 600; }
+    .cd-val { color: var(--text-dark); }
+    .cd-hr { border: none; border-top: 1px dashed #e5e7eb; margin: 6px 0; }
+</style>{% endblock %}
+
+{% block extra_body %}
+<script>
+window.CSRF_TOKEN = "{{ csrf_token }}";
+
+function toggleDebtor(id) {
+    var detail = document.getElementById('detail-' + id);
+    var row = document.getElementById('row-' + id);
+    if (!detail) return;
+    var show = detail.style.display === 'none';
+    detail.style.display = show ? 'table-row' : 'none';
+    if (row) row.classList.toggle('open', show);
+    // Fetch the inner statement (contact button + invoice table) only on first
+    // expansion — keeps the initial page small. Subsequent toggles re-show the
+    // already-loaded DOM.
+    if (show && !detail.dataset.loaded) loadDebtorStatement(detail);
+}
+
+function loadDebtorStatement(detail, force) {
+    // The statement is rendered into a stable .debtor-statement-host container
+    // (we set its innerHTML rather than replacing it) so it can be re-fetched in
+    // place after a Call/WhatsApp/Email mark or un-mark, without a full reload.
+    var host = detail.querySelector('.debtor-statement-host');
+    var base = detail.getAttribute('data-url');
+    if (!base || !host) return;
+    if (detail.dataset.loaded === '1' && !force) return;
+    detail.dataset.loaded = '1';
+    var qs = location.search ? '&' + location.search.slice(1) : '';
+    var from = encodeURIComponent(location.pathname + location.search);
+    fetch(base + '&from=' + from + qs, {headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin'})
+        .then(function (r) { if (!r.ok) throw new Error(r.statusText); return r.text(); })
+        .then(function (html) {
+            host.className = 'debtor-statement-host';
+            host.style.padding = '0';
+            host.innerHTML = html;
+        })
+        .catch(function () {
+            detail.dataset.loaded = '';
+            host.className = 'debtor-statement-host';
+            host.innerHTML = '<div class="alert alert-error" style="margin:0;">Could not load this debtor’s invoices. Please refresh and try again.</div>';
+        });
+}
+
+// Re-fetch the statement for whichever debtor an element lives in (used after a
+// contact mark / un-mark so the buttons and ticks update without a page reload).
+function refreshDebtorStatement(el) {
+    var detail = el && el.closest ? el.closest('.debtor-detail') : null;
+    if (detail) loadDebtorStatement(detail, true);
+}
+window.refreshDebtorStatement = refreshDebtorStatement;
+
+// Template picker popup: clicking a WhatsApp/Email button with several templates
+// reveals a small menu of choices instead of sending straight away.
+function closeTplPops() {
+    document.querySelectorAll('.tpl-pop.open').forEach(function (p) { p.classList.remove('open'); });
+}
+function toggleTplPop(btn) {
+    var box = btn.closest('.tpl-box');
+    if (!box) return;
+    var pop = box.querySelector('.tpl-pop');
+    if (!pop) return;
+    var wasOpen = pop.classList.contains('open');
+    closeTplPops();
+    if (!wasOpen) pop.classList.add('open');
+}
+window.toggleTplPop = toggleTplPop;
+window.closeTplPops = closeTplPops;
+
+// Show/hide the per-debtor auto-handover rule form in the statement toolbar.
+function toggleHandoverSettings(id) {
+    var f = document.getElementById(id);
+    if (f) f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+}
+window.toggleHandoverSettings = toggleHandoverSettings;
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function loadHistory(btn, force) {
+    var row = document.getElementById(btn.getAttribute('data-target'));
+    if (!row) return;
+    var wrap = row.querySelector('.timeline-wrap');
+    var url = btn.getAttribute('data-url') + (force ? '?refresh=1' : '');
+
+    if (!force && row.style.display !== 'none') { row.style.display = 'none'; btn.classList.remove('open'); return; }
+    row.style.display = 'table-row';
+    btn.classList.add('open');
+    if (!force && row.dataset.loaded === '1') return;
+
+    wrap.className = 'timeline-wrap muted';
+    wrap.textContent = 'Loading lifecycle…';
+    fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderTimeline(btn, wrap, data); row.dataset.loaded = '1'; })
+        .catch(function () {
+            wrap.className = 'timeline-wrap';
+            wrap.innerHTML = '<div class="alert alert-error" style="margin:0;">Could not load history.</div>';
+        });
+}
+
+function nowLocal() {
+    var d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+}
+
+function commentFormHtml() {
+    return '<form class="comment-form" enctype="multipart/form-data">' +
+        '<div class="cf-title">&#128172; Add a comment</div>' +
+        '<div class="cf-row"><label>Date &amp; time</label><input type="datetime-local" name="comment_at" value="' + nowLocal() + '"></div>' +
+        '<textarea name="text" rows="2" placeholder="Type your comment…"></textarea>' +
+        '<div class="cf-row"><label>Attach documents</label><input type="file" name="documents" multiple></div>' +
+        '<div class="cf-actions"><button type="submit" class="btn btn-primary btn-sm">Add comment</button> <span class="cf-status muted"></span></div>' +
+        '</form>';
+}
+
+function wireCommentForm(btn, wrap) {
+    var form = wrap.querySelector('.comment-form');
+    if (!form) return;
+    form.onsubmit = function (e) {
+        e.preventDefault();
+        var status = form.querySelector('.cf-status');
+        status.textContent = 'Saving…';
+        fetch(btn.getAttribute('data-comment-url'), {
+            method: 'POST',
+            headers: {'X-CSRFToken': window.CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest'},
+            body: new FormData(form),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) { loadHistory(btn, true); }
+            else { status.textContent = d.error || 'Could not save.'; }
+        }).catch(function () { status.textContent = 'Could not save.'; });
+        return false;
+    };
+}
+
+function renderTimeline(btn, wrap, data) {
+    wrap.className = 'timeline-wrap';
+    var events = data.events || [];
+    var html = '';
+    if (data.warning) html += '<div class="alert alert-warning" style="margin:0 0 8px;">' + escapeHtml(data.warning) + '</div>';
+
+    if (!events.length) {
+        html += '<div class="muted">No activity or comments yet for this invoice.</div>';
+    } else {
+        var emails = events.filter(function (e) { return e.is_email; }).length;
+        var comments = events.filter(function (e) { return e.is_comment; }).length;
+        var reportUrl = btn.getAttribute('data-report-url');
+        html += '<div class="timeline-note muted">' + emails + ' email/reminder · ' + comments + ' comment' + (comments === 1 ? '' : 's') +
+                ' · ' + events.length + ' total' + (data.source === 'cache' ? ' · cached' : '') +
+                ' <a href="#" class="refresh-hist">refresh</a>' +
+                (reportUrl ? ' · <a href="' + reportUrl + '" target="_blank" rel="noopener">&#128424; Printable report</a>' : '') +
+                '</div>';
+        html += '<ul class="timeline">';
+        events.forEach(function (e) {
+            if (e.is_comment) {
+                var att = (e.attachments || []).map(function (a) {
+                    return '<a href="' + encodeURI(a.url) + '" target="_blank" rel="noopener">&#128206; ' + escapeHtml(a.name) + '</a>';
+                }).join(' ');
+                html += '<li class="comment">' +
+                    '<span class="t-date">' + escapeHtml(e.date) + '</span>' +
+                    '<span class="t-action comment">Comment</span>' +
+                    (e.user ? ' <span class="t-user">by ' + escapeHtml(e.user) + '</span>' : '') +
+                    (e.details ? '<div class="c-text">' + escapeHtml(e.details) + '</div>' : '') +
+                    (att ? '<div class="c-att">' + att + '</div>' : '') +
+                    '</li>';
+            } else {
+                var cls = e.is_email ? ' email' : '';
+                html += '<li class="' + (e.is_email ? 'email' : '') + '">' +
+                    '<span class="t-date">' + escapeHtml(e.date) + '</span>' +
+                    '<span class="t-action' + cls + '">' + escapeHtml(e.action || 'Event') + '</span>' +
+                    (e.details ? ' — ' + escapeHtml(e.details) : '') +
+                    (e.user ? ' <span class="t-user">(' + escapeHtml(e.user) + ')</span>' : '') +
+                    '</li>';
+            }
+        });
+        html += '</ul>';
+    }
+
+    html += commentFormHtml();
+    wrap.innerHTML = html;
+    var rl = wrap.querySelector('.refresh-hist');
+    if (rl) rl.onclick = function () { loadHistory(btn, true); return false; };
+    wireCommentForm(btn, wrap);
+}
+
+function loadContact(btn, force) {
+    var panel = document.getElementById(btn.getAttribute('data-target'));
+    if (!panel) return;
+    var url = btn.getAttribute('data-url') + (force ? '?refresh=1' : '');
+    if (!force && panel.style.display !== 'none') { panel.style.display = 'none'; btn.classList.remove('open'); return; }
+    panel.style.display = 'block';
+    btn.classList.add('open');
+    if (!force && panel.dataset.loaded === '1') return;
+
+    panel.className = 'contact-panel muted';
+    panel.textContent = 'Loading contact details…';
+    fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderContact(btn, panel, data); panel.dataset.loaded = '1'; })
+        .catch(function () {
+            panel.className = 'contact-panel';
+            panel.innerHTML = '<div class="alert alert-error" style="margin:0;">Could not load contact details.</div>';
+        });
+}
+
+function renderContact(btn, panel, data) {
+    panel.className = 'contact-panel';
+    if (data.limit) {
+        panel.innerHTML = '<div class="alert alert-warning" style="margin:0;">' + escapeHtml(data.message) + '</div>';
+        return;
+    }
+    var c = data.contact;
+    if (!c) {
+        panel.innerHTML = '<div class="alert alert-info" style="margin:0;">' + escapeHtml(data.message || 'No contact details.') + '</div>';
+        return;
+    }
+    var rows = '';
+    function add(label, valHtml) { if (valHtml) rows += '<div class="cd-row"><span class="cd-label">' + label + '</span><span class="cd-val">' + valHtml + '</span></div>'; }
+    add('Account #', escapeHtml(c.account_number));
+    add('Email', c.email ? '<a href="mailto:' + escapeHtml(c.email) + '">' + escapeHtml(c.email) + '</a>' : '');
+    if (c.phones && c.phones.length) add('Phone', c.phones.map(function (p) { return escapeHtml((p.type ? p.type + ': ' : '') + p.number); }).join('<br>'));
+    if (c.addresses && c.addresses.length) add('Address', c.addresses.map(function (a) { return (a.type ? '<em>' + escapeHtml(a.type) + '</em><br>' : '') + a.lines.map(escapeHtml).join('<br>'); }).join('<hr class="cd-hr">'));
+    if (c.contact_persons && c.contact_persons.length) add('People', c.contact_persons.map(function (p) { return escapeHtml(p.name) + (p.email ? ' &lt;' + escapeHtml(p.email) + '&gt;' : ''); }).join('<br>'));
+    add('Payment terms', escapeHtml(c.payment_terms));
+    add('Default currency', escapeHtml(c.default_currency));
+    add('Tax number', escapeHtml(c.tax_number));
+    add('Status', escapeHtml(c.status));
+
+    var html = '';
+    if (data.warning) html += '<div class="alert alert-warning" style="margin:0 0 8px;">' + escapeHtml(data.warning) + '</div>';
+    html += rows ? '<div class="cd-title">' + escapeHtml(c.name) + '</div>' + rows
+                 : '<div class="muted">No contact details on file in Xero.</div>';
+    html += '<div class="timeline-note muted" style="margin-top:8px;">' + (data.source === 'cache' ? 'cached · ' : '') + '<a href="#" class="refresh-contact">refresh</a></div>';
+    panel.innerHTML = html;
+    var rl = panel.querySelector('.refresh-contact');
+    if (rl) rl.onclick = function () { loadContact(btn, true); return false; };
+}
+
+// --- Write-off modal ---
+function openWriteOffModal(invoiceId, invoiceNumber, contactId, contactName) {
+    var bd = document.getElementById('woBackdrop');
+    if (!bd) return;
+    document.getElementById('woInvoiceId').value = invoiceId;
+    document.getElementById('woInvoiceNumber').value = invoiceNumber;
+    document.getElementById('woContactId').value = contactId;
+    document.getElementById('woContactNameHidden').value = contactName;
+    document.getElementById('woInvNum').textContent = invoiceNumber || '';
+    document.getElementById('woContactName').textContent = contactName || '';
+    document.getElementById('woReason').value = '';
+    document.getElementById('woErr').textContent = '';
+    bd.classList.add('open');
+    setTimeout(function () { document.getElementById('woReason').focus(); }, 30);
+}
+function closeWriteOffModal(e) {
+    if (e && e.target && e.target.id !== 'woBackdrop') return;
+    var bd = document.getElementById('woBackdrop');
+    if (bd) bd.classList.remove('open');
+}
+function submitWriteOff(e) {
+    var reason = document.getElementById('woReason').value.trim();
+    if (!reason) {
+        e.preventDefault();
+        document.getElementById('woErr').textContent = 'Please give a reason for writing off this invoice.';
+        return false;
+    }
+    // Allow native form submit (CSRF + redirect handled server-side).
+    return true;
+}
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        closeWriteOffModal({target: {id: 'woBackdrop'}});
+        closeHandoverModal({target: {id: 'hoBackdrop'}});
+        closeAllRowMenus();
+        closeTplPops();
+    }
+});
+
+// --- Mark-for-handover modal ---
+function openHandoverModal(invoiceId, invoiceNumber, contactId, contactName) {
+    var bd = document.getElementById('hoBackdrop');
+    if (!bd) return;
+    document.getElementById('hoInvoiceId').value = invoiceId;
+    document.getElementById('hoInvoiceNumber').value = invoiceNumber;
+    document.getElementById('hoContactId').value = contactId;
+    document.getElementById('hoContactNameHidden').value = contactName;
+    document.getElementById('hoInvNum').textContent = invoiceNumber || '';
+    document.getElementById('hoContactName').textContent = contactName || '';
+    document.getElementById('hoReason').value = '';
+    document.getElementById('hoErr').textContent = '';
+    bd.classList.add('open');
+    setTimeout(function () { document.getElementById('hoReason').focus(); }, 30);
+}
+function closeHandoverModal(e) {
+    if (e && e.target && e.target.id !== 'hoBackdrop') return;
+    var bd = document.getElementById('hoBackdrop');
+    if (bd) bd.classList.remove('open');
+}
+function submitHandover(e) {
+    var reason = document.getElementById('hoReason').value.trim();
+    if (!reason) {
+        e.preventDefault();
+        document.getElementById('hoErr').textContent = 'Please give a reason for the handover.';
+        return false;
+    }
+    return true;
+}
+
+// --- WhatsApp reminder logging ---
+// Called by the WhatsApp button right after the wa.me link opens. comment_at
+// captures the time it was triggered; we also record the recipient phone.
+function logWhatsApp(invoiceId, toNumber, el) {
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', window.CSRF_TOKEN);
+    if (toNumber) fd.append('to', toNumber);
+    fetch('/xero/invoice/' + encodeURIComponent(invoiceId) + '/whatsapp-sent/', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function () { if (el) refreshDebtorStatement(el); })
+      .catch(function () { /* logging failures shouldn't block the user */ });
+}
+
+// --- Email reminder logging ---
+// Called by the Email button/menu right after the mailto: link opens the user's
+// mail client. Records that an email was sent (clears the email task for 7 days)
+// and refreshes that debtor's statement in place so the ✓ tick appears.
+function logEmail(invoiceId, toAddr, el) {
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', window.CSRF_TOKEN);
+    if (toAddr) fd.append('to', toAddr);
+    fetch('/xero/invoice/' + encodeURIComponent(invoiceId) + '/email-sent/', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function () { if (el) refreshDebtorStatement(el); })
+      .catch(function () { /* logging failures shouldn't block the user */ });
+}
+
+// --- Undo an accidental Call / WhatsApp / Email mark ---
+// Removes the most recent mark of that channel, then refreshes just this debtor's
+// statement so the follow-up button reappears — without reloading the whole page.
+function unlogContact(invoiceId, actionType, el) {
+    if (el) el.style.pointerEvents = 'none';
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', window.CSRF_TOKEN);
+    fd.append('action_type', actionType);
+    fetch('/xero/invoice/' + encodeURIComponent(invoiceId) + '/unlog-contact/', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function () { if (el) refreshDebtorStatement(el); })
+      .catch(function () { if (el) refreshDebtorStatement(el); });
+}
+
+// --- Per-row kebab menu ---
+function closeAllRowMenus() {
+    document.querySelectorAll('.row-menu[data-open="true"]').forEach(function (m) { m.dataset.open = 'false'; });
+    document.querySelectorAll('.row-menu-btn.open').forEach(function (b) { b.classList.remove('open'); });
+}
+function toggleRowMenu(e, btn) {
+    e.stopPropagation();  // don't let the row's loadHistory() fire
+    var menu = btn.parentNode.querySelector('.row-menu');
+    if (!menu) return;
+    var wasOpen = menu.dataset.open === 'true';
+    closeAllRowMenus();
+    if (!wasOpen) { menu.dataset.open = 'true'; btn.classList.add('open'); }
+}
+document.addEventListener('click', function (e) {
+    if (!e.target.closest('.tpl-box')) closeTplPops();
+    if (e.target.closest('.row-menu-btn, .row-menu')) return;
+    closeAllRowMenus();
+});
+</script>
+{% endblock extra_body %}
+
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <h1 class="page-title">{% if handover_page %}Handover Invoices{% elif write_off_page %}Write-off Invoices{% elif closed_page %}Closed Debtors{% else %}Debtors Action Page{% endif %}</h1>
+        <div style="display:flex; gap:8px;">
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_dashboard' %}">&larr; Dashboard</a>
+            {% if write_off_page or closed_page or handover_page %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_aging_report' %}">Open debtors</a>
+            {% endif %}
+            {% if handover_page and can_handover_manage %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_handover_overrides' %}">Handover rules{% if handover_excluded_count %} ({{ handover_excluded_count }}){% endif %}</a>
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_legal' %}">Lawyers</a>
+            {% endif %}
+            {% if not handover_page %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_handover' %}">Handover{% if handover_count %} ({{ handover_count }}){% endif %}</a>
+            {% endif %}
+            {% if not write_off_page and not user.is_lawyer %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_write_offs' %}">Write-offs{% if writeoff_count %} ({{ writeoff_count }}){% endif %}</a>
+            {% endif %}
+            {% if not closed_page and not write_off_page and not handover_page %}
+            <a class="btn btn-secondary btn-sm" href="{% url 'xero_closed_debtors' %}">Closed debtors{% if closed_count %} ({{ closed_count }}){% endif %}</a>
+            {% endif %}
+            {% if user.is_super_admin and not write_off_page and not handover_page and not closed_page %}
+            <a class="btn btn-primary btn-sm" href="{% url 'xero_refresh_now' %}">Refresh now</a>
+            {% endif %}
+        </div>
+    </div>
+    <p class="page-subtitle">
+        As of {{ as_of }} &middot; {% if handover_page %}{{ snapshot_count }} handover invoice{{ snapshot_count|pluralize }} across {{ debtor_count }} debtor{{ debtor_count|pluralize }}{% elif write_off_page %}{{ writeoff_count }} written-off invoice{{ writeoff_count|pluralize }} across {{ debtor_count }} debtor{{ debtor_count|pluralize }}{% else %}{{ debtor_count }} {% if closed_page %}closed{% else %}open{% endif %} debtor{{ debtor_count|pluralize }}{% endif %} &middot;
+        {% if last_success %}
+            last synced <span class="ok">{{ last_success.finished_at|timesince }} ago</span>
+        {% else %}
+            <span class="stale">never synced</span>
+        {% endif %}
+        {% if last_run and last_run.status == 'FAILED' %}
+            &middot; <span class="failed">last sync FAILED: {{ last_run.error_message }}</span>
+        {% endif %}
+    </p>
+
+    {% if view_admin_label %}
+    <div class="alert alert-info" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Viewing <strong>{{ view_admin_label }}</strong>'s allocated debtors.</span>
+        <a href="{{ request.path }}">Show all debtors</a>
+    </div>
+    {% endif %}
+
+    <div class="databox">
+        <strong>Data window:</strong>
+        {% if earliest_invoice_date %}
+            invoices dated <strong>{{ earliest_invoice_date }}</strong> &rarr; <strong>{{ latest_invoice_date }}</strong>
+        {% else %}
+            (no snapshot data &mdash; click "Refresh now" to pull from Xero)
+        {% endif %}
+        &nbsp;|&nbsp; <strong>Open invoices stored:</strong> {{ snapshot_count }}
+        &nbsp;|&nbsp; <strong>Total outstanding:</strong> R&nbsp;{{ grand_total|floatformat:2|intcomma }}
+    </div>
+
+    <form method="get" class="debtor-search">
+        <input type="text" name="q" value="{{ search }}" placeholder="Search debtor name or invoice number…" class="form-control" style="max-width:340px;">
+        {% if admins %}
+        <label style="font-size:12px; font-weight:600; color:var(--text-muted);">Administrator:</label>
+        <select name="admin" class="form-control" style="width:auto;" onchange="this.form.submit()">
+            <option value="">All administrators</option>
+            {% for a in admins %}
+            <option value="{{ a.id }}"{% if view_admin_id == a.id|stringformat:'s' %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        {% if available_projects %}
+        <div class="proj-filter" style="position:relative; display:inline-block;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleProjMenu(event)">
+                Projects{% if selected_projects %} ({{ selected_projects|length }}){% else %}: All{% endif %} &#9662;
+            </button>
+            <div id="projMenu" onclick="event.stopPropagation();"
+                 style="display:none; position:absolute; left:0; top:110%; z-index:60; background:#fff;
+                        border:1px solid #d6efee; border-radius:8px; padding:10px 12px; min-width:260px;
+                        max-height:300px; overflow:auto; box-shadow:0 6px 18px rgba(0,0,0,.14);">
+                {% for p in available_projects %}
+                <label style="display:block; font-size:13px; padding:3px 0; white-space:nowrap; cursor:pointer;">
+                    <input type="checkbox" name="project" value="{{ p }}"{% if p in selected_projects %} checked{% endif %}> {{ p }}
+                </label>
+                {% endfor %}
+                <div style="margin-top:8px; display:flex; gap:8px; border-top:1px solid #eef2f2; padding-top:8px;">
+                    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                    {% if selected_projects %}<a class="btn btn-secondary btn-sm" href="{{ request.path }}{% if qs_no_project %}?{{ qs_no_project }}{% endif %}">Clear</a>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if selected_bucket %}<input type="hidden" name="bucket" value="{{ selected_bucket }}">{% endif %}
+        {% if selected_stage %}<input type="hidden" name="stage" value="{{ selected_stage }}">{% endif %}
+        {% if not admins and view_admin_id %}<input type="hidden" name="admin" value="{{ view_admin_id }}">{% endif %}
+        <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+        {% if search %}<a href="{{ request.path }}{% if selected_stage %}?stage={{ selected_stage }}{% endif %}{% if view_admin_id %}{% if selected_stage %}&amp;{% else %}?{% endif %}admin={{ view_admin_id }}{% endif %}">Clear search</a>{% endif %}
+    </form>
+    <script>
+    function toggleProjMenu(e){ e.stopPropagation(); var m=document.getElementById('projMenu'); if(m){ m.style.display = (m.style.display==='block') ? 'none' : 'block'; } }
+    document.addEventListener('click', function(){ var m=document.getElementById('projMenu'); if(m) m.style.display='none'; });
+    </script>
+    {% if selected_projects %}
+    <p class="filter-hint">Project filter: <strong>{{ selected_projects|join:", " }}</strong> &mdash; {{ displayed_debtor_count }} debtor{{ displayed_debtor_count|pluralize }} (R&nbsp;{{ displayed_total|floatformat:2|intcomma }}).
+        <a href="{{ request.path }}{% if qs_no_project %}?{{ qs_no_project }}{% endif %}">Clear projects</a></p>
+    {% endif %}
+
+    <p class="filter-hint">
+        {% if selected_stage %}
+            Scorecard filter: <strong>{{ selected_stage_label }}</strong>
+            &mdash; {{ displayed_debtor_count }} debtor{{ displayed_debtor_count|pluralize }} (R&nbsp;{{ displayed_total|floatformat:2|intcomma }}).
+            <a href="{{ request.path }}{% if search %}?q={{ search|urlencode }}{% endif %}">Clear scorecard filter</a>
+        {% elif selected_bucket %}
+            Filtered to <strong>{{ selected_bucket }}</strong> &mdash; showing {{ displayed_debtor_count }} debtor{{ displayed_debtor_count|pluralize }}
+            (R&nbsp;{{ displayed_total|floatformat:2|intcomma }}).
+            <a href="{{ request.path }}">Show all buckets</a>
+        {% else %}
+            Click a bucket below to show only invoices in that age band, or search a debtor above.
+        {% endif %}
+    </p>
+
+    <div class="summary">
+        {% for b in bucket_summary %}
+        <a class="tile{% if b.label == selected_bucket %} active{% endif %}" href="{{ request.path }}?bucket={{ b.label|urlencode }}{% if selected_stage %}&amp;stage={{ selected_stage }}{% endif %}{% if view_admin_id %}&amp;admin={{ view_admin_id }}{% endif %}{{ project_query }}">
+            <div class="label">{{ b.label }}</div>
+            <div class="amount">R&nbsp;{{ b.amount|floatformat:2|intcomma }}</div>
+            <div class="meta">{{ b.count }} inv &middot; {{ b.pct|floatformat:1 }}%</div>
+        </a>
+        {% endfor %}
+        <a class="tile total{% if not selected_bucket %} active{% endif %}" href="{{ request.path }}?{% if selected_stage %}stage={{ selected_stage }}&amp;{% endif %}{% if view_admin_id %}admin={{ view_admin_id }}&amp;{% endif %}{{ project_query_bare }}">
+            <div class="label">Total Outstanding</div>
+            <div class="amount">R&nbsp;{{ grand_total|floatformat:2|intcomma }}</div>
+            <div class="meta">across {{ debtor_count }} debtor{{ debtor_count|pluralize }}</div>
+        </a>
+    </div>
+
+    {% if debtors %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Debtor</th>
+                <th>Status</th>
+                {% for label in bucket_labels %}
+                <th class="num">{{ label }}</th>
+                {% endfor %}
+                <th class="num">Total Outstanding</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in debtors %}
+            <tr class="debtor-row" id="row-{{ d.index }}" onclick="toggleDebtor({{ d.index }})">
+                <td>
+                    <div class="contact"><span class="caret">&#9654;</span> {{ d.name }}
+                        <span class="invcount">({{ d.invoice_count }} invoice{{ d.invoice_count|pluralize }})</span>
+                    </div>
+                    {% if d.email %}<div class="email" style="padding-left:22px;">{{ d.email }}</div>{% endif %}
+                    {% if d.project_code %}<div class="proj-line" style="padding-left:22px;"><span class="alloc-label">Project:</span> {{ d.project_code }}</div>{% endif %}
+                    <div class="alloc-line" style="padding-left:22px;" onclick="event.stopPropagation();">
+                        <span class="alloc-label">Allocated to:</span>
+                        {% if can_allocate %}
+                        <form method="post" action="{% url 'xero_allocate_debtor' %}" class="alloc-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="contact_id" value="{{ d.cid }}">
+                            <input type="hidden" name="contact_name" value="{{ d.name }}">
+                            <input type="hidden" name="next" value="{{ current_full_path }}">
+                            <select name="administrator" class="alloc-select" onchange="this.form.submit()">
+                                <option value="">&mdash; Unallocated &mdash;</option>
+                                {% for a in admins %}
+                                <option value="{{ a.id }}"{% if a.id == d.allocated_to_id %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                        {% else %}
+                        <span class="alloc-name {% if not d.allocated_to_name %}unalloc{% endif %}">{{ d.allocated_to_name|default:"Unallocated" }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="status-cell">
+                    {% if handover_page %}
+                        {% if d.legal_status == 'active' %}
+                            <a class="hd-summary" style="text-decoration:none;" href="{% url 'xero_legal_matter' d.legal_id %}" onclick="event.stopPropagation();" title="With the lawyers — open the workflow">&#9878; With lawyers</a>
+                        {% elif d.legal_status == 'pending' %}
+                            <span class="hd-summary partial" title="Sent to the lawyers — awaiting Super Admin approval">&#9878; Pending approval</span>
+                        {% elif d.legal_status == 'closed' %}
+                            <span class="hd-summary none" title="Lawyer matter closed / withdrawn">&#9878; Lawyers: closed</span>
+                        {% else %}
+                            <span class="hd-summary none" title="Not yet sent to the lawyers">&#9878; Not sent to lawyers</span>
+                        {% endif %}
+                    {% endif %}
+                    {# One combined badge each — names which channels are missed / due. #}
+                    {% if d.missed_labels %}<span class="missed-badge" title="No contact logged in time for: {{ d.missed_labels|join:', ' }}">&#9888; Missed: {{ d.missed_labels|join:", " }}</span>{% endif %}
+                    {% if d.due_labels %}<span class="call-badge" title="Follow-up due for: {{ d.due_labels|join:', ' }}">&#9200; Due: {{ d.due_labels|join:", " }}</span>{% endif %}
+                </td>
+                {% for cell in d.bucket_list %}
+                <td class="num{% if cell.amount == 0 %} zero{% endif %}">
+                    {% if cell.amount %}R&nbsp;{{ cell.amount|floatformat:2|intcomma }}{% else %}&mdash;{% endif %}
+                </td>
+                {% endfor %}
+                <td class="num"><strong>R&nbsp;{{ d.total|floatformat:2|intcomma }}</strong></td>
+                <td class="action-cell">
+                    <a class="debtor-action-btn report" href="{% url 'xero_company_report' %}?cid={{ d.cid|urlencode }}"
+                       target="_blank" rel="noopener" onclick="event.stopPropagation();">&#128196; Report</a>
+                    {% if closed_page and can_manage %}
+                    <form method="post" action="{% url 'xero_reopen_debtor' %}" class="debtor-action" onclick="event.stopPropagation();">
+                        {% csrf_token %}
+                        <input type="hidden" name="contact_id" value="{{ d.cid }}">
+                        <input type="hidden" name="contact_name" value="{{ d.name }}">
+                        <button type="submit" class="debtor-action-btn reopen">&#8634; Reopen</button>
+                    </form>
+                    {% elif can_manage and not write_off_page and not handover_page and not closed_page %}
+                    <form method="post" action="{% url 'xero_close_debtor' %}" class="debtor-action" onclick="event.stopPropagation();"
+                          onsubmit="return confirm('Mark {{ d.name|escapejs }} as closed? They will move to the Closed Debtors page.');">
+                        {% csrf_token %}
+                        <input type="hidden" name="contact_id" value="{{ d.cid }}">
+                        <input type="hidden" name="contact_name" value="{{ d.name }}">
+                        <button type="submit" class="debtor-action-btn close">&#10005; Mark closed</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr class="debtor-detail" id="detail-{{ d.index }}" style="display:none;"
+                data-url="{% url 'xero_debtor_statement' %}?cid={{ d.cid|urlencode }}&amp;scope={% if handover_page %}handover{% elif write_off_page %}writeoff{% elif closed_page %}closed{% else %}open{% endif %}&amp;index={{ d.index }}">
+                <td colspan="{{ bucket_labels|length|add:4 }}">
+                    <div class="debtor-statement-host muted" style="padding:14px 18px;">Loading&hellip;</div>
+                </td>
+            </tr>
+            {% endfor %}
+            <tr class="totals">
+                <td>Totals{% if selected_bucket %} ({{ selected_bucket }}){% endif %}</td>
+                <td></td>
+                {% for amt in column_total_list %}
+                <td class="num">R&nbsp;{{ amt|floatformat:2|intcomma }}</td>
+                {% endfor %}
+                <td class="num">R&nbsp;{{ displayed_total|floatformat:2|intcomma }}</td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+    {% elif handover_page %}
+    <p class="muted">No invoices on the handover page{% if selected_bucket %} in this bucket{% endif %}. Invoices over 65 days past due appear here automatically (unless their client has been excluded), or an administrator can mark a specific invoice for handover from the Debtors Action page.</p>
+    {% elif write_off_page %}
+    <p class="muted">No written-off invoices{% if selected_bucket %} in this bucket{% endif %}. Use the &#8855; Write off button on an invoice on the Debtors Action Page to write it off, and it will appear here.</p>
+    {% elif closed_page %}
+    <p class="muted">No closed debtors{% if selected_bucket %} in this bucket{% endif %}. Mark a debtor as closed on the Debtors Action Page and they'll appear here.</p>
+    {% else %}
+    <p class="muted">No open debtors{% if selected_bucket %} in this bucket{% endif %}{% if not snapshot_count %} — click "Refresh now" to pull from Xero{% endif %}.</p>
+    {% endif %}
+
+    {% if not closed_page and not write_off_page and not handover_page %}
+    <div id="hoBackdrop" class="wo-backdrop" onclick="closeHandoverModal(event)">
+        <form id="hoForm" class="wo-card" method="post" action="{% url 'xero_handover_mark' %}"
+              onclick="event.stopPropagation();" onsubmit="return submitHandover(event);">
+            {% csrf_token %}
+            <h3>Mark invoice <span id="hoInvNum"></span> for handover</h3>
+            <div class="sub">For <strong id="hoContactName"></strong>. The reason will be recorded on the invoice lifecycle.</div>
+            <label for="hoReason">Reason for handover <span style="color:var(--brand-red);">*</span></label>
+            <textarea id="hoReason" name="reason" required placeholder="e.g. No response to final demand &mdash; escalating."></textarea>
+            <div id="hoErr" class="err"></div>
+            <input type="hidden" name="invoice_id" id="hoInvoiceId">
+            <input type="hidden" name="invoice_number" id="hoInvoiceNumber">
+            <input type="hidden" name="contact_id" id="hoContactId">
+            <input type="hidden" name="contact_name" id="hoContactNameHidden">
+            <input type="hidden" name="next" value="{{ current_full_path }}">
+            <div class="actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeHandoverModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">Send to handover</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if not closed_page and not write_off_page and not handover_page %}
+    <div id="woBackdrop" class="wo-backdrop" onclick="closeWriteOffModal(event)">
+        <form id="woForm" class="wo-card" method="post" action="{% url 'xero_write_off_invoice' %}"
+              onclick="event.stopPropagation();" onsubmit="return submitWriteOff(event);">
+            {% csrf_token %}
+            <h3>Write off invoice <span id="woInvNum"></span></h3>
+            <div class="sub">For <strong id="woContactName"></strong>. The reason will be recorded on the invoice lifecycle.</div>
+            <label for="woReason">Reason for writing off <span style="color:var(--brand-red);">*</span></label>
+            <textarea id="woReason" name="reason" required placeholder="e.g. Client wound up — debt deemed uncollectible."></textarea>
+            <div id="woErr" class="err"></div>
+            <input type="hidden" name="invoice_id" id="woInvoiceId">
+            <input type="hidden" name="invoice_number" id="woInvoiceNumber">
+            <input type="hidden" name="contact_id" id="woContactId">
+            <input type="hidden" name="contact_name" id="woContactNameHidden">
+            <input type="hidden" name="next" value="{{ current_full_path }}">
+            <div class="actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeWriteOffModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">Confirm write-off</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

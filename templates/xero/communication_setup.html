@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Communication Setup - FSA Debtor System{% endblock %}
+{% block extra_head %}
+<style>
+    .cs-card { background: #fff; border-radius: 12px; padding: 20px 24px; box-shadow: 0 2px 10px rgba(15,23,42,.06); margin-bottom: 18px; }
+    .cs-card h2 { font-size: 16px; color: var(--navy); margin: 0 0 4px; }
+    .cs-sub { color: #6b7280; font-size: 12.5px; margin: 0 0 14px; }
+    .tpl { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+    .tpl.is-default { border-color: #86efac; background: #f7fef9; }
+    .tpl-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .tpl-head .nm { font-weight: 700; color: var(--navy); }
+    .badge-default { font-size: 11px; font-weight: 700; color: #166534; background: #dcfce7; border: 1px solid #86efac; border-radius: 10px; padding: 1px 8px; }
+    .tpl label, .add-tpl label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin: 8px 0 3px; }
+    .tpl input[type=text], .tpl textarea,
+    .add-tpl input[type=text], .add-tpl textarea { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Segoe UI', Roboto, sans-serif; font-size: 13.5px; box-sizing: border-box; }
+    .tpl textarea, .add-tpl textarea { min-height: 120px; resize: vertical; }
+    .tpl-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    .tpl-actions .spacer { margin-left: auto; }
+    .preview-line { font-size: 12px; color: #475569; background: #f8fafc; border: 1px dashed #e2e8f0; border-radius: 8px; padding: 8px 10px; margin-top: 8px; white-space: pre-wrap; word-wrap: break-word; }
+    .preview-line .pl-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: #94a3b8; display: block; margin-bottom: 2px; }
+    .add-tpl { border: 1px dashed #cbd5e1; border-radius: 10px; padding: 14px 16px; background: #fbfdff; }
+    .add-tpl h3 { margin: 0 0 8px; font-size: 13.5px; color: var(--navy); }
+    .ph-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 13px; }
+    .ph-table th, .ph-table td { padding: 7px 10px; border-bottom: 1px solid #eef2f2; text-align: left; vertical-align: top; }
+    .ph-table th { background: #f5fbfb; color: #5a8a8a; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+    .ph-table code { background: #f1f5f5; color: #0f4c4c; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+    .btn-danger { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #b91c1c; color: #fff; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <h1 class="page-title">Communication Setup</h1>
+        <a class="btn btn-secondary btn-sm" href="{% url 'xero_dashboard' %}">&larr; Dashboard</a>
+    </div>
+    <p class="page-subtitle">Create the reminder templates the per-invoice &#9993; Email and &#128241; WhatsApp buttons offer. When a channel has more than one template, a dropdown appears next to the button so the user picks which wording to send. The recipient (email address / WhatsApp number) comes from the debtor's Xero contact details.</p>
+
+    {# ---- Email templates ---- #}
+    <div class="cs-card">
+        <h2>&#9993; Email templates</h2>
+        <p class="cs-sub">Each template has a subject and a body. Placeholders in curly braces are filled in per invoice.</p>
+
+        {% for t in email_templates %}
+        <form method="post" class="tpl {% if t.is_default %}is-default{% endif %}">
+            {% csrf_token %}
+            <input type="hidden" name="id" value="{{ t.id }}">
+            <div class="tpl-head">
+                <span class="nm">{{ t.name }}</span>
+                {% if t.is_default %}<span class="badge-default">Default</span>{% endif %}
+            </div>
+            <label>Template name</label>
+            <input type="text" name="name" value="{{ t.name }}">
+            <label>Subject</label>
+            <input type="text" name="subject" value="{{ t.subject }}">
+            <label>Body</label>
+            <textarea name="body">{{ t.body }}</textarea>
+            <div class="preview-line"><span class="pl-label">Preview (sample invoice)</span><strong>{{ t.preview_subject }}</strong>{% if t.preview_body %}
+
+{{ t.preview_body }}{% endif %}</div>
+            <div class="tpl-actions">
+                <button type="submit" name="action" value="save" class="btn btn-primary btn-sm">Save</button>
+                {% if not t.is_default %}<button type="submit" name="action" value="make_default" class="btn btn-secondary btn-sm">Make default</button>{% endif %}
+                <span class="spacer"></span>
+                {% if not t.is_default %}<button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Delete the email template “{{ t.name|escapejs }}”?');">Delete</button>{% endif %}
+            </div>
+        </form>
+        {% empty %}
+        <p class="muted" style="font-size:13px;">No email templates yet — add one below.</p>
+        {% endfor %}
+
+        <form method="post" class="add-tpl">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="channel" value="email">
+            <h3>+ Add an email template</h3>
+            <label>Template name</label>
+            <input type="text" name="name" placeholder="e.g. Final notice">
+            <label>Subject</label>
+            <input type="text" name="subject" value="{{ default_email_subject }}">
+            <label>Body</label>
+            <textarea name="body" placeholder="Type the email body…">{{ default_email_body }}</textarea>
+            <div class="tpl-actions"><button type="submit" class="btn btn-primary btn-sm">Add email template</button></div>
+        </form>
+    </div>
+
+    {# ---- WhatsApp templates ---- #}
+    <div class="cs-card">
+        <h2>&#128241; WhatsApp templates</h2>
+        <p class="cs-sub">WhatsApp uses the body only (no subject). The message opens pre-filled in WhatsApp; the user still presses send.</p>
+
+        {% for t in wa_templates %}
+        <form method="post" class="tpl {% if t.is_default %}is-default{% endif %}">
+            {% csrf_token %}
+            <input type="hidden" name="id" value="{{ t.id }}">
+            <div class="tpl-head">
+                <span class="nm">{{ t.name }}</span>
+                {% if t.is_default %}<span class="badge-default">Default</span>{% endif %}
+            </div>
+            <label>Template name</label>
+            <input type="text" name="name" value="{{ t.name }}">
+            <label>Message</label>
+            <textarea name="body">{{ t.body }}</textarea>
+            <div class="preview-line"><span class="pl-label">Preview (sample invoice)</span>{{ t.preview_body }}</div>
+            <div class="tpl-actions">
+                <button type="submit" name="action" value="save" class="btn btn-primary btn-sm">Save</button>
+                {% if not t.is_default %}<button type="submit" name="action" value="make_default" class="btn btn-secondary btn-sm">Make default</button>{% endif %}
+                <span class="spacer"></span>
+                {% if not t.is_default %}<button type="submit" name="action" value="delete" class="btn btn-sm btn-danger"
+                        onclick="return confirm('Delete the WhatsApp template “{{ t.name|escapejs }}”?');">Delete</button>{% endif %}
+            </div>
+        </form>
+        {% empty %}
+        <p class="muted" style="font-size:13px;">No WhatsApp templates yet — add one below.</p>
+        {% endfor %}
+
+        <form method="post" class="add-tpl">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="channel" value="whatsapp">
+            <h3>+ Add a WhatsApp template</h3>
+            <label>Template name</label>
+            <input type="text" name="name" placeholder="e.g. Friendly nudge">
+            <label>Message</label>
+            <textarea name="body" placeholder="Type the WhatsApp message…">{{ default_wa_body }}</textarea>
+            <div class="tpl-actions"><button type="submit" class="btn btn-primary btn-sm">Add WhatsApp template</button></div>
+        </form>
+    </div>
+
+    {# ---- Placeholders ---- #}
+    <div class="cs-card">
+        <h2>Placeholders</h2>
+        <p class="cs-sub">Wrap any of these in curly braces inside a subject or body. Unknown placeholders are left as literal text so a typo doesn't blank the message.</p>
+        <table class="ph-table">
+            <thead><tr><th>Placeholder</th><th>What it becomes</th></tr></thead>
+            <tbody>
+                {% for key, desc in placeholders %}
+                <tr><td><code>{% templatetag openbrace %}{{ key }}{% templatetag closebrace %}</code></td><td>{{ desc }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

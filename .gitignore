@@ -1,0 +1,37 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+/media/
+/staticfiles/
+
+# Data dumps & logs (contain real Xero/debtor data — keep out of the repo)
+xero_backup*.json
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS / office temp files
+Thumbs.db
+.DS_Store
+~$*
+
+# Export files
+*.xlsx
+
+# Node (only if a JS toolchain is ever added)
+node_modules/
