@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}Lawyer Report - FSA Debtor System{% endblock %}
+{% block extra_head %}
+<style>
+    .rep-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px; align-items: start; }
+    @media (max-width: 860px) { .rep-grid { grid-template-columns: 1fr; } }
+    .rep-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(15,23,42,.05); }
+    .rep-card h2 { margin: 0 0 4px; font-size: 16px; color: var(--navy); }
+    .rep-sub { color: #6b7280; font-size: 12.5px; margin: 0 0 14px; }
+    .rep-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+    .rep-field { display: flex; flex-direction: column; gap: 4px; }
+    .rep-field label { font-size: 12px; font-weight: 600; color: #475569; }
+    .rep-field select, .rep-field input { min-width: 140px; }
+    .rec-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+    .rec-table td { padding: 7px 6px; border-bottom: 1px solid #f1f5f9; }
+    .rec-off { color: #9ca3af; }
+    .pill { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; }
+    .pill.on { background: #dcfce7; color: #166534; } .pill.off { background: #f1f5f9; color: #64748b; }
+    .rep-status { font-size: 13px; color: #475569; margin-top: 6px; }
+    .rep-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-card">
+    <div class="flex-between">
+        <div>
+            <h1 class="page-title">Lawyer Report</h1>
+            <p class="page-subtitle mt-0">A weekly summary of newly handed-over companies and the progress of every active matter, emailed to the lawyers and management.</p>
+        </div>
+    </div>
+
+    <div class="rep-grid">
+        <!-- Schedule -->
+        <div class="rep-card">
+            <h2>Schedule</h2>
+            <p class="rep-sub">When the report goes out. Server time is now {{ server_now|date:"D d M Y, H:i" }}.</p>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_schedule">
+                <div class="rep-row">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:var(--navy);">
+                        <input type="checkbox" name="enabled" {% if cfg.enabled %}checked{% endif %}> Automatic sending enabled
+                    </label>
+                </div>
+                <div class="rep-row">
+                    <div class="rep-field">
+                        <label>Frequency</label>
+                        <select name="frequency" class="form-control" id="freq">
+                            {% for value, label in frequency_choices %}
+                            <option value="{{ value }}"{% if cfg.frequency == value %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="rep-field" id="dow-field">
+                        <label>Day of week</label>
+                        <select name="day_of_week" class="form-control">
+                            {% for value, label in dow_choices %}
+                            <option value="{{ value }}"{% if cfg.day_of_week == value %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="rep-field" id="dom-field">
+                        <label>Day of month</label>
+                        <select name="day_of_month" class="form-control">
+                            {% for d in dom_range %}
+                            <option value="{{ d }}"{% if cfg.day_of_month == d %} selected{% endif %}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="rep-field">
+                        <label>Time</label>
+                        <input type="time" name="send_time" class="form-control" value="{{ cfg.send_time_label }}">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save schedule</button>
+                <div class="rep-status">
+                    {% if cfg.last_sent_at %}Last sent {{ cfg.last_sent_at|date:"D d M Y, H:i" }}.{% else %}Not sent yet.{% endif %}
+                </div>
+            </form>
+
+            <hr style="border:none; border-top:1px solid #eef2f4; margin:16px 0;">
+            <div class="rep-actions">
+                <a class="btn btn-secondary btn-sm" href="{% url 'xero_lawyer_report_preview' %}" target="_blank" rel="noopener">Preview report</a>
+                <form method="post" onsubmit="return confirm('Send the report now to all active recipients?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="send_now">
+                    <button type="submit" class="btn btn-primary btn-sm">Send now</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recipients -->
+        <div class="rep-card">
+            <h2>Recipients</h2>
+            <p class="rep-sub">Everyone here receives the report. Add the lawyers and any managers.</p>
+            <form method="post" class="rep-row" style="align-items:flex-end;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_recipient">
+                <div class="rep-field" style="flex:1; min-width:180px;">
+                    <label>Email address</label>
+                    <input type="email" name="email" class="form-control" placeholder="name@company.com" required>
+                </div>
+                <div class="rep-field">
+                    <label>Name (optional)</label>
+                    <input type="text" name="name" class="form-control" placeholder="Jane Attorney">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Add</button>
+            </form>
+
+            <table class="rec-table">
+                <tbody>
+                {% for r in recipients %}
+                <tr>
+                    <td class="{% if not r.is_active %}rec-off{% endif %}">
+                        <strong>{{ r.email }}</strong>{% if r.name %} <span class="muted">— {{ r.name }}</span>{% endif %}
+                    </td>
+                    <td style="text-align:right;"><span class="pill {% if r.is_active %}on{% else %}off{% endif %}">{% if r.is_active %}Active{% else %}Paused{% endif %}</span></td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <form method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="toggle_recipient">
+                            <input type="hidden" name="recipient_id" value="{{ r.id }}">
+                            <button type="submit" class="btn btn-secondary btn-sm">{% if r.is_active %}Pause{% else %}Resume{% endif %}</button>
+                        </form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Remove {{ r.email|escapejs }}?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="remove_recipient">
+                            <input type="hidden" name="recipient_id" value="{{ r.id }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td class="muted">No recipients yet — add one above.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var freq = document.getElementById('freq'),
+        dow = document.getElementById('dow-field'),
+        dom = document.getElementById('dom-field');
+    function sync() {
+        var f = freq.value;
+        dow.style.display = (f === 'weekly' || f === 'fortnightly') ? '' : 'none';
+        dom.style.display = (f === 'monthly') ? '' : 'none';
+    }
+    freq.addEventListener('change', sync); sync();
+})();
+</script>
+{% endblock %}

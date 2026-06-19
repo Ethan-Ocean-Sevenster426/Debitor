@@ -26,6 +26,31 @@
     .lk-tile.teal .lk-label { color: #d6f1f0; } .lk-tile.teal .lk-value { color: #fff; }
     .lk-tile.amber { background: #fff7ed; border-color: #fed7aa; } .lk-tile.amber .lk-label, .lk-tile.amber .lk-value { color: #9a3412; }
     .lk-tile.warn { background: #fef9c3; border-color: #fde68a; } .lk-tile.warn .lk-label, .lk-tile.warn .lk-value { color: #854d0e; }
+    .lk-tile.green { background: #ecfdf5; border-color: #a7f3d0; } .lk-tile.green .lk-label, .lk-tile.green .lk-value { color: #047857; }
+    /* Stale-matter highlight (no activity for a while) */
+    .lm-card.warn { background: #fffbeb; border-color: #fcd34d; }
+    .lm-card.stale { background: #fef2f2; border-color: #fca5a5; }
+    .idle-badge { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 12px; }
+    .idle-badge.warn { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+    .idle-badge.stale { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    /* Horizontal milestone timeline (always visible) */
+    .tlh-label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #94a3b8; font-weight: 700; margin: 12px 0 2px; }
+    .tlh { display: flex; gap: 0; overflow-x: auto; padding: 14px 0 6px; }
+    .tlh-node { position: relative; flex: 0 0 auto; min-width: 150px; max-width: 170px; padding: 16px 10px 0; }
+    .tlh-node::before { content: ''; position: absolute; top: 6px; left: 0; right: 0; height: 2px; background: #e5e7eb; }
+    .tlh-node:first-child::before { left: 50%; }
+    .tlh-node:last-child::before { right: 50%; }
+    .tlh-dot { position: absolute; top: 1px; left: 50%; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 50%; background: #cbd5e1; border: 2px solid #fff; z-index: 1; }
+    .tlh-node.milestone .tlh-dot { background: var(--brand-teal, #0E7C7B); }
+    .tlh-node.step .tlh-dot { background: #16a34a; }
+    .tlh-node.comment .tlh-dot { background: #2563eb; }
+    .tlh-node.route .tlh-dot { background: #d97706; }
+    .tlh-date { font-size: 10.5px; color: #94a3b8; font-weight: 700; }
+    .tlh-title { font-size: 12px; font-weight: 600; color: #1f2937; margin-top: 2px; line-height: 1.25; }
+    .tlh-detail { font-size: 11px; color: #64748b; margin-top: 2px; line-height: 1.2; }
+    .tlh-att { margin-top: 3px; }
+    .tlh-att a { font-size: 12px; text-decoration: none; margin-right: 4px; }
+    .tlh-who { font-size: 10px; color: #94a3b8; margin-top: 3px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -38,6 +63,7 @@
 
     {# ---- Lawyer dashboard KPIs ---- #}
     <div class="lk-grid">
+        <div class="lk-tile green"><div class="lk-label">&#128176; Recovered (with lawyers)</div><div class="lk-value">R&nbsp;{{ kpi_recovered_month|floatformat:2|intcomma }}</div><div class="lk-hint">this month &middot; all-time R {{ kpi_recovered_total|floatformat:2|intcomma }}</div></div>
         <div class="lk-tile"><div class="lk-label">Active matters</div><div class="lk-value">{{ kpi_active }}</div></div>
         <div class="lk-tile teal"><div class="lk-label">Avg completion</div><div class="lk-value">{{ kpi_avg_completion }}%</div></div>
         <div class="lk-tile amber"><div class="lk-label">Not yet in litigation</div><div class="lk-value">{{ kpi_not_in_litigation }}</div><div class="lk-hint">still in collections — no summons/application step done</div></div>
@@ -56,10 +82,12 @@
         ({{ grp.list|length }})
     </div>
     {% for m in grp.list %}
-    <div class="lm-card">
+    <div class="lm-card {{ m.staleness }}">
         <div class="lm-head">
             <span class="lm-name">{{ m.contact_name|default:m.contact_id }}</span>
             <span class="lm-status {{ m.status }}">{{ m.get_status_display }}</span>
+            {% if m.staleness == 'stale' %}<span class="idle-badge stale" title="No milestone or comment for {{ m.days_idle }} days">&#9888; No activity {{ m.days_idle }} days</span>
+            {% elif m.staleness == 'warn' %}<span class="idle-badge warn" title="No milestone or comment for {{ m.days_idle }} days">&#9888; No activity {{ m.days_idle }} days</span>{% endif %}
             <div class="lm-actions">
                 {% if m.status == 'active' %}
                 <a class="btn btn-primary btn-sm" href="{% url 'xero_legal_matter' m.id %}">Open workflow &rarr;</a>
@@ -90,6 +118,8 @@
             <div class="lm-track">{{ m.route_summary }} &middot; {{ m.progress_done }}/{{ m.progress_total }} steps done</div>
         </div>
         {% endif %}
+        <div class="tlh-label">Milestones</div>
+        {% include "xero/_legal_timeline.html" with timeline=m.milestones matter=m %}
         <div class="lm-meta">
             Sent by {{ m.sent_by|default:"—" }} {{ m.sent_at|date:"Y-m-d H:i" }}{% if m.approved_by %} &middot; approved by {{ m.approved_by }} {{ m.approved_at|date:"Y-m-d H:i" }}{% endif %}{% if m.status == 'closed' and m.closed_by %} &middot; closed by {{ m.closed_by }} {{ m.closed_at|date:"Y-m-d H:i" }}{% endif %}
         </div>

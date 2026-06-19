@@ -9,7 +9,10 @@
             <h1 class="page-title">User Management</h1>
             <p class="page-subtitle mt-0">{{ users|length }} user{{ users|length|pluralize }}</p>
         </div>
-        <a class="btn btn-primary" href="{% url 'user_create' %}">+ Add User</a>
+        <div style="display:flex; gap:8px;">
+            <a class="btn btn-secondary" href="{% url 'user_create' %}">+ Add directly</a>
+            <a class="btn btn-primary" href="{% url 'user_invite' %}">+ Invite User</a>
+        </div>
     </div>
 
     <form method="get" class="filter-bar" style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
@@ -17,9 +20,9 @@
                placeholder="Search name or email">
         <select name="role" class="form-control" style="width:auto;">
             <option value="">All roles</option>
-            <option value="super_admin"{% if role_filter == 'super_admin' %} selected{% endif %}>Super Admin</option>
-            <option value="administrator"{% if role_filter == 'administrator' %} selected{% endif %}>Administrator</option>
-            <option value="inspector"{% if role_filter == 'inspector' %} selected{% endif %}>Inspector</option>
+            {% for value, label in roles %}
+            <option value="{{ value }}"{% if role_filter == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
         </select>
         <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
         {% if search or role_filter %}<a href="{% url 'user_list' %}">Clear</a>{% endif %}
@@ -44,13 +47,22 @@
                 <td>
                     {% if u.is_active %}
                         <span class="badge badge-active">Active</span>
+                    {% elif u.is_pending_invite %}
+                        <span class="badge badge-pending">Invited</span>
                     {% else %}
                         <span class="badge badge-inactive">Inactive</span>
                     {% endif %}
                 </td>
                 <td class="text-right">
                     <a class="btn btn-secondary btn-sm" href="{% url 'user_edit' u.pk %}">Edit</a>
+                    {% if u.is_pending_invite %}
+                    <form method="post" action="{% url 'user_resend_invite' u.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-secondary btn-sm">Resend invite</button>
+                    </form>
+                    {% else %}
                     <a class="btn btn-secondary btn-sm" href="{% url 'user_reset_password' u.pk %}">Reset PW</a>
+                    {% endif %}
                     {% if u != request.user %}
                     <form method="post" action="{% url 'user_toggle_active' u.pk %}" style="display:inline;">
                         {% csrf_token %}

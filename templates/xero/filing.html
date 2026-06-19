@@ -9,6 +9,8 @@
     .file-search { display: flex; gap: 8px; margin: 0 0 14px; }
     .file-search input { flex: 1; max-width: 360px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
     .ls-chip { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .doc-count { font-weight: 700; color: var(--brand-teal, #0E7C7B); }
+    .file-table .num { text-align: right; }
 </style>
 {% endblock %}
 {% block content %}
@@ -25,11 +27,12 @@
 
     {% if companies %}
     <table class="file-table">
-        <thead><tr><th>Company</th><th class="num">Open invoices</th><th>Legal status</th><th></th></tr></thead>
+        <thead><tr><th>Company</th><th class="num">Files</th><th class="num">Open invoices</th><th>Legal status</th><th></th></tr></thead>
         <tbody>
             {% for c in companies %}
             <tr>
                 <td><strong>{{ c.name }}</strong></td>
+                <td class="num">{% if c.doc_count %}<span class="doc-count">&#128206; {{ c.doc_count }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
                 <td class="num">{{ c.open_invoices }}</td>
                 <td>{% if c.legal_status %}<span class="ls-chip">{{ c.legal_status }}</span>{% else %}&mdash;{% endif %}</td>
                 <td style="text-align:right;"><a class="btn btn-secondary btn-sm" href="{% url 'xero_filing_company' %}?cid={{ c.cid|urlencode|default:c.name|urlencode }}">Open file &rarr;</a></td>

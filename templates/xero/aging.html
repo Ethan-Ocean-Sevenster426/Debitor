@@ -314,6 +314,7 @@ function commentFormHtml() {
         '<div class="cf-row"><label>Date &amp; time</label><input type="datetime-local" name="comment_at" value="' + nowLocal() + '"></div>' +
         '<textarea name="text" rows="2" placeholder="Type your comment…"></textarea>' +
         '<div class="cf-row"><label>Attach documents</label><input type="file" name="documents" multiple></div>' +
+        '<div class="cf-row"><label>Nature of file</label><input type="text" name="nature" maxlength="120" placeholder="e.g. Proof of payment, Statement"></div>' +
         '<div class="cf-actions"><button type="submit" class="btn btn-primary btn-sm">Add comment</button> <span class="cf-status muted"></span></div>' +
         '</form>';
 }

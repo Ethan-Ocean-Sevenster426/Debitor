@@ -1,12 +1,24 @@
 {% load humanize %}
 {% if chart.has_data %}
-<svg class="line-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img">
-    <line class="axis" x1="26" y1="{{ chart.baseline }}" x2="{{ chart.width|add:-6 }}" y2="{{ chart.baseline }}"></line>
-    <polyline points="{{ chart.points }}" fill="none" stroke="#0E7C7B" stroke-width="2"
+<svg class="chartsvg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Outstanding by invoice month">
+    <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0E7C7B" stop-opacity="0.30"></stop>
+            <stop offset="100%" stop-color="#0E7C7B" stop-opacity="0"></stop>
+        </linearGradient>
+    </defs>
+    {% for t in chart.yticks %}
+    <line class="grid" x1="{{ chart.plot_left }}" y1="{{ t.y }}" x2="{{ chart.plot_right }}" y2="{{ t.y }}"></line>
+    <text class="ytick" x="{{ chart.ylabel_x }}" y="{{ t.ty }}" text-anchor="end">{{ t.label }}</text>
+    {% endfor %}
+    <path d="{{ chart.area }}" fill="url(#areaGrad)"></path>
+    <polyline points="{{ chart.points }}" fill="none" stroke="#0E7C7B" stroke-width="2.5"
               stroke-linejoin="round" stroke-linecap="round"></polyline>
     {% for d in chart.dots %}
-    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="3" fill="#0E7C7B"><title>{{ d.label }}: R {{ d.amount|floatformat:2|intcomma }}</title></circle>
-    <text class="lbl" x="{{ d.x }}" y="{{ chart.baseline|add:14 }}" text-anchor="middle">{{ d.short }}</text>
+    <circle cx="{{ d.x }}" cy="{{ d.y }}" r="3.5" fill="#fff" stroke="#0E7C7B" stroke-width="2">
+        <title>{{ d.label }}: R {{ d.amount|floatformat:2|intcomma }}</title>
+    </circle>
+    <text class="xtick" x="{{ d.x }}" y="{{ chart.label_y }}" text-anchor="middle">{{ d.short }}</text>
     {% endfor %}
 </svg>
 {% else %}

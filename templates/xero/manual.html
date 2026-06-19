@@ -60,7 +60,10 @@
             <li><a href="#lifecycle">Invoice lifecycle, comments &amp; documents</a></li>
             <li><a href="#closed">Closing &amp; reopening debtors</a></li>
             <li><a href="#reports">Reports (legal / collections)</a></li>
-            <li><a href="#users">Managing users</a></li>
+            <li><a href="#users">Managing users &amp; invites</a></li>
+            <li><a href="#filing">Filing &amp; documents</a></li>
+            <li><a href="#lawyerreport">The weekly lawyer report &amp; alerts</a></li>
+            <li><a href="#email">Email setup (invites, resets, reports)</a></li>
         </ol>
     </div>
 
@@ -73,15 +76,15 @@
         <tr><th>Role</th><th>Sees</th><th>Can do</th></tr>
         <tr><td><span class="tag navy">Super Admin</span></td><td>Everything — all debtors, all administrators, the lawyers' matters, system-wide figures and the filing archive.</td><td><strong>Everything.</strong> Manage users; allocate companies; close/reopen debtors; write off invoices; set handover rules &amp; mark for handover; send companies to the lawyers, <em>approve</em> them and bring them back; Communication Setup; Schedule &amp; go-live date; Filing. Plus all collections actions.</td></tr>
         <tr><td><span class="tag teal">Administrator</span></td><td>Only the companies allocated to them (and the Lawyers page, read-only, for oversight).</td><td><strong>Collections only.</strong> Log calls / WhatsApps / emails; add comments &amp; upload documents; set a debtor's follow-up cadence shift (payment arrangements); run reports. <em>Cannot</em> close debtors, write off, handover, send to / approve lawyers, allocate, or open Filing / Users / Schedule / Communication Setup.</td></tr>
-        <tr><td><span class="tag amber">Lawyer</span></td><td>Only the <strong>Lawyers</strong> page — the approved matters assigned to them and their progress.</td><td>Work the LBINC legal workflow: tick steps, comment on any step and <strong>upload documents</strong>, switch a route between Unopposed / Opposed. Cannot see the debtor, dashboard, handover or filing pages.</td></tr>
-        <tr><td><span class="tag amber">Inspector</span></td><td>Reserved role (no access by default).</td><td>Reserved — permissions to be defined as needed.</td></tr>
+        <tr><td><span class="tag amber">Lawyer</span></td><td>The <strong>Lawyers</strong> page (their approved matters and progress) and the <strong>Filing</strong> archive.</td><td>Work the LBINC legal workflow: tick steps, comment on any step and <strong>upload documents</strong>, switch a route between Unopposed / Opposed; browse the Filing archive. Cannot see the debtor, dashboard or handover pages.</td></tr>
     </table>
     <div class="note"><strong>Key rule:</strong> only a <strong>Super Admin</strong> can close debtors, write off invoices, send companies to the lawyers and <em>approve</em> them. Administrators focus purely on collecting (call / WhatsApp / email). Lawyers only ever see their own legal workflow page. Closed businesses are excluded from the dashboard totals and the open list, so the figures always reflect money still being actively collected.</div>
 
     <h2 id="login">3. Logging in</h2>
     <ul>
         <li>Go to the app URL and sign in with your email address and password.</li>
-        <li>Change your password after first login (Users page → your account → Reset password).</li>
+        <li><strong>Forgot your password?</strong> Use the link on the login page — the system emails you a secure link to set a new one. (The link expires after a few days and works once.)</li>
+        <li>New users normally arrive via an <strong>invite email</strong> (see §12) and set their own password from the link.</li>
         <li>Use <strong>Logout</strong> (top-right) when finished.</li>
     </ul>
 
@@ -155,11 +158,38 @@
         <li>Use the browser's <strong>Print / Save as PDF</strong> to hand the report to a customer, attorney, or for your records.</li>
     </ul>
 
-    <h2 id="users">12. Managing users</h2>
+    <h2 id="users">12. Managing users &amp; invites</h2>
     <ul>
-        <li>Open <strong>Users</strong> (top menu). Add a user with a name, email and role; set or reset passwords; deactivate users who leave.</li>
-        <li>Only Super Admins can manage users.</li>
+        <li>Open <strong>Users</strong> (top menu). Only Super Admins can manage users.</li>
+        <li><strong>Invite User</strong> (recommended) — enter a name, email and <strong>role</strong>, then send. The person gets an email with a secure link to set their own password and activate their account. Pending invites show an <span class="tag amber">Invited</span> badge with a <strong>Resend invite</strong> button.</li>
+        <li><strong>Add directly</strong> — create the account and set a password yourself (for cases where you can't email them).</li>
+        <li><strong>Reset PW</strong> sets a password for a user; users can also reset their own from the login page.</li>
+        <li>Roles are <strong>Super Admin</strong>, <strong>Administrator</strong> and <strong>Lawyer</strong>. A user with no role assigned has no access until you give them one. Deactivate users who leave.</li>
         <li>New administrators start with no companies — allocate companies to them on the Debtors Action Page.</li>
+    </ul>
+
+    <h2 id="filing">13. Filing &amp; documents</h2>
+    <ul>
+        <li>The <strong>Filing</strong> page lists every company on file, searchable, with a <strong>Files</strong> count (📎) showing how many documents are on record for each.</li>
+        <li>Open a company to see its full archive: invoices &amp; lifecycle, every comment, all uploaded documents, and its legal history.</li>
+        <li>Every uploaded document is filed with its <strong>date uploaded</strong> and its <strong>nature</strong> (what kind of document it is — e.g. <em>Summons</em>, <em>Court order</em>, <em>Proof of payment</em>). Enter the nature in the box next to the file when you attach it (on a legal-matter step or an invoice comment).</li>
+        <li><strong>Who can see Filing:</strong> Super Admins and <strong>Lawyers</strong>. Administrators do not have the Filing page.</li>
+    </ul>
+
+    <h2 id="lawyerreport">14. The weekly lawyer report &amp; alerts</h2>
+    <ul>
+        <li><strong>Lawyer Report</strong> (Super Admin menu) configures an automatic report emailed to the lawyers and management as a <strong>PDF</strong>.</li>
+        <li>It summarises <strong>KPIs</strong> (active matters, new this period, average completion, in-litigation, idle 7+/14+ days, money recovered with the lawyers) and lists every active matter with its progress, stage and <strong>last day it was worked on</strong>. Idle matters are <strong>colour-coded</strong> (amber at 7 days, red at 14), and each company links straight to its matter.</li>
+        <li><strong>Recipients</strong> — add/remove the email addresses that receive it (pause or remove any). <strong>Schedule</strong> — set the frequency (daily / weekly / fortnightly / monthly), day and time. Use <strong>Preview</strong> to see the PDF and <strong>Send now</strong> to send immediately.</li>
+        <li>It is <strong>off by default</strong>: enable it and add at least one recipient to start sending.</li>
+        <li><strong>New-client alert:</strong> when a Super Admin <em>approves</em> a company for the lawyers, the report recipients are automatically emailed that a new client needs attention, with a link to the matter.</li>
+    </ul>
+
+    <h2 id="email">15. Email setup (invites, resets, reports)</h2>
+    <ul>
+        <li>The system sends email through a single company mailbox via Microsoft 365 (Microsoft Graph). This powers <strong>user invites</strong>, <strong>password resets</strong>, the <strong>weekly lawyer report</strong> and <strong>new-client alerts</strong>.</li>
+        <li>Setup of the mailbox and credentials is a one-time technical task done by whoever deploys the system (see the deployment <code>README</code>). Once configured, all the email features above just work.</li>
+        <li>Links inside those emails (e.g. "set your password", "open the matter") point at the live system address. If a link ever points at <code>localhost</code>, tell your system administrator — the server's <code>SITE_BASE_URL</code> needs updating.</li>
     </ul>
 
     <div class="note" style="margin-top:24px;">Questions or changes needed? Note the exact page and what you expected, and pass it to your system administrator.</div>

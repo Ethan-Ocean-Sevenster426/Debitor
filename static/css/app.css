@@ -165,9 +165,10 @@ a:hover { text-decoration: underline; }
 }
 .badge-super_admin { background: var(--warn-bg); color: #92400e; }
 .badge-administrator { background: #e0f2f2; color: #065f5e; }
-.badge-inspector { background: #e0e7ff; color: #3730a3; }
+.badge-lawyer { background: #ede9fe; color: #5b21b6; }
 .badge-active { background: var(--success-bg); color: var(--success-text); }
 .badge-inactive { background: var(--error-bg); color: var(--error-text); }
+.badge-pending { background: #ffedd5; color: #9a3412; }
 
 /* ---------- Forms ---------- */
 .form-group { margin-bottom: 18px; }

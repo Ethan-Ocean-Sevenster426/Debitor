@@ -1,18 +1,31 @@
 {% load humanize %}
 {% if bars.has_data %}
-<svg class="bar-chart" viewBox="0 0 {{ bars.width }} {{ bars.height }}" role="img" style="width:100%; height:auto;">
-    <line class="axis" x1="30" y1="{{ bars.baseline }}" x2="{{ bars.width|add:-6 }}" y2="{{ bars.baseline }}" stroke="#e5e7eb"></line>
+<svg class="chartsvg" viewBox="0 0 {{ bars.width }} {{ bars.height }}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Recovered vs outstanding by month">
+    <defs>
+        <linearGradient id="barOut" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f87171"></stop>
+            <stop offset="100%" stop-color="#dc2626"></stop>
+        </linearGradient>
+        <linearGradient id="barRec" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#34d399"></stop>
+            <stop offset="100%" stop-color="#16a34a"></stop>
+        </linearGradient>
+    </defs>
+    {% for t in bars.yticks %}
+    <line class="grid" x1="{{ bars.plot_left }}" y1="{{ t.y }}" x2="{{ bars.plot_right }}" y2="{{ t.y }}"></line>
+    <text class="ytick" x="{{ bars.ylabel_x }}" y="{{ t.ty }}" text-anchor="end">{{ t.label }}</text>
+    {% endfor %}
     {% for b in bars.bars %}
-    <rect x="{{ b.ox }}" y="{{ b.oy }}" width="{{ b.bw }}" height="{{ b.oh }}" fill="#dc2626" rx="2">
+    <rect x="{{ b.ox }}" y="{{ b.oy }}" width="{{ b.bw }}" height="{{ b.oh }}" fill="url(#barOut)" rx="3">
         <title>{{ b.label }} — Outstanding: R {{ b.out_amount|floatformat:2|intcomma }}</title></rect>
-    <rect x="{{ b.rx }}" y="{{ b.ry }}" width="{{ b.bw }}" height="{{ b.rh }}" fill="#16a34a" rx="2">
+    <rect x="{{ b.rx }}" y="{{ b.ry }}" width="{{ b.bw }}" height="{{ b.rh }}" fill="url(#barRec)" rx="3">
         <title>{{ b.label }} — Recovered: R {{ b.rec_amount|floatformat:2|intcomma }}</title></rect>
-    <text class="lbl" x="{{ b.lx }}" y="{{ bars.label_y }}" text-anchor="middle" font-size="10" fill="#64748b">{{ b.short }}</text>
+    <text class="xtick" x="{{ b.lx }}" y="{{ bars.label_y }}" text-anchor="middle">{{ b.short }}</text>
     {% endfor %}
 </svg>
 <div class="bar-legend">
-    <span><span class="sw" style="background:#dc2626;"></span> Outstanding (R&nbsp;{{ bars.out_total|floatformat:2|intcomma }})</span>
-    <span><span class="sw" style="background:#16a34a;"></span> Recovered (R&nbsp;{{ bars.rec_total|floatformat:2|intcomma }})</span>
+    <span><span class="sw" style="background:linear-gradient(180deg,#f87171,#dc2626);"></span> Outstanding (R&nbsp;{{ bars.out_total|floatformat:2|intcomma }})</span>
+    <span><span class="sw" style="background:linear-gradient(180deg,#34d399,#16a34a);"></span> Recovered (R&nbsp;{{ bars.rec_total|floatformat:2|intcomma }})</span>
 </div>
 {% else %}
 <p class="muted">No data yet — recovered amounts appear here as payments come in.</p>

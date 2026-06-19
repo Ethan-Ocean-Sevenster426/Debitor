@@ -1,0 +1,41 @@
+{% load humanize %}<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;max-width:640px;">
+    <h2 style="color:#0E7C7B;margin:0 0 2px;">Lawyer progress report</h2>
+    <p style="color:#6b7280;margin:0 0 14px;font-size:13px;">
+        {{ period_start|date:"d M Y" }} &ndash; {{ generated_at|date:"d M Y" }}
+    </p>
+
+    <p style="font-size:14px;margin:0 0 12px;">The detailed report is attached as a PDF. Headline numbers:</p>
+
+    <table role="presentation" style="width:100%;border-collapse:separate;border-spacing:6px 0;margin-bottom:14px;">
+        <tr>
+            {% for label, val in tiles %}
+            <td style="background:#f5fbfb;border:1px solid #d6efee;border-radius:8px;padding:10px 6px;text-align:center;width:25%;">
+                <div style="font-size:21px;font-weight:700;color:#0E7C7B;line-height:1;">{{ val }}</div>
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#5a8a8a;margin-top:4px;">{{ label }}</div>
+            </td>
+            {% endfor %}
+        </tr>
+    </table>
+
+    <p style="font-size:13px;color:#475569;margin:0 0 6px;">
+        {{ kpis.in_litigation }} in litigation &middot; {{ kpis.in_collections }} in collections &middot;
+        average {{ kpis.avg_days_idle }} day{{ kpis.avg_days_idle|pluralize }} since last worked.
+    </p>
+    <p style="font-size:13px;color:#047857;margin:0 0 6px;">
+        Recovered with the lawyers: <strong>R&nbsp;{{ kpis.recovered_period|floatformat:2|intcomma }}</strong> this period
+        &middot; R&nbsp;{{ kpis.recovered_total|floatformat:2|intcomma }} all-time.
+    </p>
+    {% if kpis.idle_14 %}
+    <p style="font-size:13px;color:#b91c1c;margin:8px 0 0;font-weight:600;">
+        &#9888; {{ kpis.idle_14 }} matter{{ kpis.idle_14|pluralize }} with no activity for 14+ days &mdash; see the PDF.
+    </p>
+    {% endif %}
+
+    <p style="margin:18px 0;">
+        <a href="{{ legal_url }}" style="display:inline-block;padding:10px 18px;background:#0E7C7B;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Open the Lawyers page</a>
+    </p>
+
+    <p style="color:#9ca3af;font-size:12px;margin-top:18px;border-top:1px solid #eef2f4;padding-top:10px;">
+        Sent automatically by the FSA Debtor System.
+    </p>
+</div>

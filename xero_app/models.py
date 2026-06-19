@@ -297,6 +297,9 @@ class InvoiceCommentAttachment(models.Model):
     comment = models.ForeignKey(InvoiceComment, on_delete=models.CASCADE, related_name="attachments")
     file = models.FileField(upload_to="invoice_comments/%Y/%m/")
     original_name = models.CharField(max_length=255, blank=True)
+    # What kind of document this is (e.g. "Proof of payment", "Statement"),
+    # captured at upload so the filing reads clearly. Blank on older rows.
+    nature = models.CharField(max_length=120, blank=True, default="")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -534,6 +537,91 @@ def _humanize_td(td):
     return f"{h}h" if h else f"{m}m"
 
 
+class LawyerReportConfig(models.Model):
+    """Singleton schedule + on/off switch for the weekly lawyer progress report.
+
+    A Windows Scheduled Task fires `manage.py send_lawyer_report` frequently;
+    `is_due()` gates whether a report actually goes out — so the whole schedule
+    (frequency, day, time) is configurable from the UI without touching Task
+    Scheduler. Recipients live in ReportRecipient."""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    FORTNIGHTLY = "fortnightly"
+    MONTHLY = "monthly"
+    FREQUENCY_CHOICES = [
+        (DAILY, "Every day"),
+        (WEEKLY, "Every week"),
+        (FORTNIGHTLY, "Every 2 weeks"),
+        (MONTHLY, "Every month"),
+    ]
+    DOW_CHOICES = [(0, "Monday"), (1, "Tuesday"), (2, "Wednesday"), (3, "Thursday"),
+                   (4, "Friday"), (5, "Saturday"), (6, "Sunday")]
+    _MIN_GAP_DAYS = {DAILY: 1, WEEKLY: 6, FORTNIGHTLY: 13, MONTHLY: 27}
+    _PERIOD_DAYS = {DAILY: 1, WEEKLY: 7, FORTNIGHTLY: 14, MONTHLY: 30}
+
+    enabled = models.BooleanField(default=False)
+    frequency = models.CharField(max_length=12, choices=FREQUENCY_CHOICES, default=WEEKLY)
+    day_of_week = models.IntegerField(default=0)    # 0=Mon..6=Sun (weekly/fortnightly)
+    day_of_month = models.IntegerField(default=1)   # 1..28 (monthly)
+    send_hour = models.IntegerField(default=7)      # 0..23, server-local time
+    send_minute = models.IntegerField(default=0)    # 0..59
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.CharField(max_length=255, blank=True, default="")
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def period_days(self):
+        return self._PERIOD_DAYS.get(self.frequency, 7)
+
+    @property
+    def send_time_label(self):
+        return f"{self.send_hour:02d}:{self.send_minute:02d}"
+
+    def is_due(self, now=None):
+        """True when a report should be sent right now: enabled, today's send
+        time has passed, today matches the configured day, and we haven't already
+        sent within this period."""
+        from django.utils import timezone as tz
+        if not self.enabled:
+            return False
+        now = now or tz.now()
+        local = tz.localtime(now)
+        slot = local.replace(hour=self.send_hour, minute=self.send_minute,
+                             second=0, microsecond=0)
+        if local < slot:
+            return False
+        if self.frequency in (self.WEEKLY, self.FORTNIGHTLY):
+            if local.weekday() != self.day_of_week:
+                return False
+        elif self.frequency == self.MONTHLY:
+            if local.day != self.day_of_month:
+                return False
+        if self.last_sent_at:
+            gap = (local.date() - tz.localtime(self.last_sent_at).date()).days
+            if gap < self._MIN_GAP_DAYS.get(self.frequency, 6):
+                return False
+        return True
+
+
+class ReportRecipient(models.Model):
+    """An email address that receives the weekly lawyer report. Managed (add /
+    remove / toggle) from the report settings page."""
+    email = models.EmailField()
+    name = models.CharField(max_length=120, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["email"]
+
+    def __str__(self):
+        return self.email
+
+
 class SyncRun(models.Model):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -665,6 +753,9 @@ class LegalStepCommentAttachment(models.Model):
     comment = models.ForeignKey(LegalStepComment, on_delete=models.CASCADE, related_name="attachments")
     file = models.FileField(upload_to="legal_comments/%Y/%m/")
     original_name = models.CharField(max_length=255, blank=True)
+    # Nature of the document (e.g. "Summons", "Court order", "Letter of demand"),
+    # captured at upload so the filing reads clearly. Blank on older rows.
+    nature = models.CharField(max_length=120, blank=True, default="")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -673,18 +764,25 @@ class RecoveredInvoice(models.Model):
     comparing the open-invoice snapshot to the previous one (a drop in amount_due
     = money in). One row per payment event, so partial payments each get a row.
 
-    `credited` records whether the recovery counts toward an administrator's
-    collections total: it does only when, at the time of payment, the invoice was
-    allocated to an admin, had been actively followed up (a logged call / WhatsApp
-    / email), and had NOT yet reached handover / the lawyers. Otherwise the
-    payment is still logged but attributed to handover/legal or left uncredited."""
-    REASON_COLLECTED = "collected"        # credited to the admin
-    REASON_HANDOVER_LEGAL = "handover_legal"
+    `credited` records whether the payment counts as recovered money. Credited
+    recoveries are attributed by `reason`:
+      * REASON_COLLECTED — recovered in active collections (allocated + followed up
+        via a logged call/WhatsApp/email, not yet at handover). `administrator` is
+        the allocated admin; it counts toward THEIR recovered total.
+      * REASON_COLLECTED_LEGAL — recovered while approved/active with the lawyers
+        (partial payments included). Credited to the LAWYERS as a team total;
+        `administrator` is left null (it is NOT an administrator's credit).
+    Payments that land while merely on the handover page (not yet approved with the
+    lawyers), or with no allocation, are recorded but left uncredited."""
+    REASON_COLLECTED = "collected"            # credited — recovered during collections
+    REASON_COLLECTED_LEGAL = "collected_legal"  # credited — recovered while with the lawyers
+    REASON_HANDOVER_LEGAL = "handover_legal"  # on handover page, not yet active legal — uncredited
     REASON_NO_FOLLOWUP = "no_followup"
     REASON_UNALLOCATED = "unallocated"
     REASON_CHOICES = [
         (REASON_COLLECTED, "Collected by admin"),
-        (REASON_HANDOVER_LEGAL, "In handover / with lawyers"),
+        (REASON_COLLECTED_LEGAL, "Recovered while with the lawyers"),
+        (REASON_HANDOVER_LEGAL, "In handover (pre-lawyers)"),
         (REASON_NO_FOLLOWUP, "No follow-up logged"),
         (REASON_UNALLOCATED, "Debtor not allocated"),
     ]

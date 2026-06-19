@@ -26,6 +26,7 @@ urlpatterns = [
     path("legal/cancel/", views.xero_legal_cancel, name="xero_legal_cancel"),
     path("legal/return/", views.xero_legal_return, name="xero_legal_return"),
     path("legal/<int:matter_id>/", views.xero_legal_matter, name="xero_legal_matter"),
+    path("legal/<int:matter_id>/timeline/", views.xero_legal_timeline, name="xero_legal_timeline"),
     path("legal/<int:matter_id>/opposed/", views.xero_legal_toggle_opposed, name="xero_legal_toggle_opposed"),
     path("legal/<int:matter_id>/step/", views.xero_legal_step_toggle, name="xero_legal_step_toggle"),
     path("legal/<int:matter_id>/comment/", views.xero_legal_step_comment, name="xero_legal_step_comment"),
@@ -45,6 +46,8 @@ urlpatterns = [
     path("company-report/", views.xero_company_report, name="xero_company_report"),
     path("manual/", views.xero_manual, name="xero_manual"),
     path("schedule/", views.xero_schedule, name="xero_schedule"),
+    path("lawyer-report/", views.xero_lawyer_report, name="xero_lawyer_report"),
+    path("lawyer-report/preview/", views.xero_lawyer_report_preview, name="xero_lawyer_report_preview"),
     path("communication-setup/", views.xero_communication_setup, name="xero_communication_setup"),
     # Back-compat: the old single-channel template pages were merged into
     # Communication Setup — redirect any stale bookmarks there.

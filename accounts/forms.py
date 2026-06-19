@@ -26,6 +26,22 @@ class UserCreateForm(StyledFormMixin, UserCreationForm):
         self._style()
 
 
+class UserInviteForm(StyledFormMixin, forms.ModelForm):
+    """Invite a new user: capture their name, email and role. No password — the
+    invitee sets that themselves via the emailed invite link."""
+
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'email', 'role')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['first_name'].required = True
+        self.fields['last_name'].required = True
+        self.fields['role'].choices = Role.choices
+        self._style()
+
+
 class UserEditForm(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = User

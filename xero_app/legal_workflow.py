@@ -115,3 +115,27 @@ ALL_STEP_KEYS = {
                        APPLICATION_UNOPPOSED, APPLICATION_OPPOSED)
     for t in group
 }
+
+# Stable step key -> human label, used by the milestone timeline. Because the
+# Summons/Application branches each have an Unopposed and an Opposed variant with
+# the same label, this de-duplicates by key. `_route` is the pseudo-key under
+# which route / Unopposed↔Opposed changes are logged.
+STEP_LABELS = {
+    t[0]: t[1]
+    for group in (COLLECTIONS, SUMMONS_UNOPPOSED, SUMMONS_OPPOSED,
+                  APPLICATION_UNOPPOSED, APPLICATION_OPPOSED)
+    for t in group
+}
+STEP_LABELS["_route"] = "Route / defence"
+
+
+def step_section(step_key):
+    """Which section a step key belongs to ('Collections' / 'Summons' /
+    'Application for payment'), for labelling timeline entries."""
+    if step_key.startswith(("su_", "so_")):
+        return "Summons"
+    if step_key.startswith(("au_", "ao_")):
+        return "Application for payment"
+    if step_key == "_route":
+        return ""
+    return "Collections"

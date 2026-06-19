@@ -5,11 +5,16 @@ first and comparing amount_due, we can see money coming in: a drop in amount_due
 (or an invoice dropping off the open list entirely) is a payment. Each payment is
 logged as a RecoveredInvoice — partial payments each get their own row.
 
-Attribution (agreed rules): the recovery is *credited* to the allocated
-administrator only when, at the time of payment, the invoice was allocated to an
-admin, had been actively followed up (a logged Call / WhatsApp / Email), and had
-NOT yet reached handover / the lawyers. Otherwise the payment is still recorded,
-attributed to handover/legal or left uncredited.
+Attribution (agreed rules), at the time of payment:
+  * COLLECTIONS — the invoice was still being chased (allocated + a logged
+    Call/WhatsApp/Email) and had NOT yet reached handover. Credited to the
+    allocated ADMINISTRATOR. -> REASON_COLLECTED.
+  * WITH THE LAWYERS — the company had an APPROVED (active) legal matter when the
+    payment landed. Counts as recovered money but the credit goes to the LAWYERS
+    (a team total; no administrator is attributed). -> REASON_COLLECTED_LEGAL.
+    Each payment counts (partial payments included).
+Payments that land while only on the handover page (sent but not yet approved with
+the lawyers), or with no allocation, are recorded but left uncredited.
 
 This is pure database work (no Xero API calls), so it never affects the sync's
 rate budget, and it is designed to never raise into the sync — call it inside a
@@ -75,8 +80,13 @@ def detect_recoveries(tenant_id, prev_snapshot):
                        .values_list("invoice_id", flat=True))
     handover_ids = set(HandoverInvoice.objects.filter(tenant_id=tenant_id)
                        .values_list("invoice_id", flat=True))
+    # All matters mark "reached handover/lawyers" (no collections credit); only
+    # APPROVED (active) matters earn the new legal-stage recovery credit.
     legal_contacts = set(LegalMatter.objects.filter(tenant_id=tenant_id)
                          .values_list("contact_id", flat=True))
+    active_legal_contacts = set(LegalMatter.objects
+                                .filter(tenant_id=tenant_id, status=LegalMatter.ACTIVE)
+                                .values_list("contact_id", flat=True))
     threshold_map = _threshold_map(tenant_id)
     alloc = {a.contact_id: a.administrator
              for a in DebtorAllocation.objects.filter(tenant_id=tenant_id).select_related("administrator")}
@@ -99,26 +109,37 @@ def detect_recoveries(tenant_id, prev_snapshot):
 
         cid = p["contact_id"] or ""
         dpd = p["days_past_due"] or 0
-        reached = _reached_handover(cid, iid, dpd, threshold_map, handover_ids, legal_contacts)
         admin = alloc.get(cid)
         followed_up = iid in contacted_ids
-        credited = bool(admin) and followed_up and not reached
-        if credited:
-            reason = RecoveredInvoice.REASON_COLLECTED
-        elif reached:
+
+        if cid in active_legal_contacts:
+            # Recovered while approved/active with the lawyers. This counts as
+            # recovered money (credited) but the credit goes to the LAWYERS, not
+            # the administrator — so no admin is attributed to the row.
+            credited = True
+            reason = RecoveredInvoice.REASON_COLLECTED_LEGAL
+            credit_admin = None
+        elif _reached_handover(cid, iid, dpd, threshold_map, handover_ids, legal_contacts):
+            # On the handover page (or a pending/closed matter) but not active with
+            # the lawyers — recorded, but nobody earns collections credit.
+            credited = False
             reason = RecoveredInvoice.REASON_HANDOVER_LEGAL
-        elif not admin:
-            reason = RecoveredInvoice.REASON_UNALLOCATED
+            credit_admin = None
         else:
-            reason = RecoveredInvoice.REASON_NO_FOLLOWUP
+            # Still in active collections — credit the allocated admin.
+            credited = bool(admin) and followed_up
+            credit_admin = admin if credited else None
+            reason = (RecoveredInvoice.REASON_COLLECTED if credited
+                      else (RecoveredInvoice.REASON_UNALLOCATED if not admin
+                            else RecoveredInvoice.REASON_NO_FOLLOWUP))
 
         rows.append(RecoveredInvoice(
             tenant_id=tenant_id, invoice_id=iid,
             invoice_number=p.get("invoice_number") or "",
             contact_id=cid, contact_name=p.get("contact_name") or "",
             amount=delta, credited=credited,
-            administrator=admin if credited else None,
-            administrator_name=(admin.get_full_name() or admin.email) if (credited and admin) else "",
+            administrator=credit_admin,
+            administrator_name=(credit_admin.get_full_name() or credit_admin.email) if credit_admin else "",
             reason=reason, days_past_due=dpd,
         ))
 

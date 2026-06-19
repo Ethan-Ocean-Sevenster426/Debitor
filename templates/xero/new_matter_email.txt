@@ -1,0 +1,9 @@
+A new client has been handed to the lawyers.
+
+{{ name }} has been approved and is now active - it needs attention.
+Approved{% if approved_by %} by {{ approved_by }}{% endif %} on {{ approved_at|date:"d M Y, H:i" }}.
+
+Open the matter: {{ url }}
+Lawyers page: {{ legal_url }}
+
+Sent automatically by the FSA Debtor System.

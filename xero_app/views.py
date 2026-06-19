@@ -29,12 +29,14 @@ from .models import (XeroConnection, OpenInvoiceSnapshot, SyncRun, SyncSchedule,
                      HandoverInvoice, HandoverExclusion, WhatsAppTemplate, OnlineInvoiceLink,
                      EmailTemplate, MessageTemplate, SystemSetting, HandoverSetting,
                      LegalMatter, LegalStep, LegalStepComment, LegalStepCommentAttachment,
-                     RecoveredInvoice, DEFAULT_WA_TEMPLATE, DEFAULT_EMAIL_SUBJECT,
-                     DEFAULT_EMAIL_BODY)
+                     RecoveredInvoice, LawyerReportConfig, ReportRecipient,
+                     DEFAULT_WA_TEMPLATE, DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY)
 from . import legal_workflow
 from .xero_client import (fetch_invoice_history, fetch_contact, clean_contact,
                           fetch_online_invoice_url, pacer, XeroDailyLimitError)
 from . import outreach
+from . import reports
+from . import notifications
 from accounts.decorators import super_admin_required
 
 User = get_user_model()
@@ -837,8 +839,8 @@ def _aging_context(request, tenant_id, closed_only, write_off_only=False, handov
     ever_call_invoices = ever_logs[CallLog.ACTION_CALL]
     ever_wa_invoices = ever_logs[CallLog.ACTION_WHATSAPP]
     ever_email_invoices = ever_logs[CallLog.ACTION_EMAIL]
-    # Administrators/inspectors see only companies allocated to them. Super admins
-    # see everything, but may drill into one administrator's book via ?admin=<id>.
+    # Administrators see only companies allocated to them. Super admins see
+    # everything, but may drill into one administrator's book via ?admin=<id>.
     # Lawyers on the Handover page see all activated invoices, unrestricted by allocation.
     view_admin = None
     if request.user.is_super_admin or (is_lawyer and handover_only):
@@ -1644,7 +1646,13 @@ def xero_legal_approve(request):
         matter.approved_by = request.user.email
         matter.approved_at = timezone.now()
         matter.save()
-        messages.success(request, f"{matter.contact_name or matter.contact_id} approved — now on the Lawyers page.")
+        # Alert the lawyers that a new client needs attention. Never let an email
+        # problem block the approval itself.
+        notified = notifications.notify_new_matter_approved(
+            matter, approved_by=request.user.get_full_name() or request.user.email)
+        note = " Lawyers notified." if notified else ""
+        messages.success(request, f"{matter.contact_name or matter.contact_id} approved — "
+                                  f"now on the Lawyers page.{note}")
     return redirect(request.POST.get("next") or "xero_legal")
 
 
@@ -1717,6 +1725,68 @@ def _legal_workflow_sections(matter):
     return sections
 
 
+def _legal_timeline(matter):
+    """Chronological milestones for a matter: lifecycle events, completed steps,
+    and comments — each with who / when / what (and any attached documents).
+    Oldest first, so it reads as a progression."""
+    events = []
+
+    def add(dt, who, kind, title, detail="", attachments=None, section=""):
+        if not dt:
+            return
+        events.append({"date": dt, "who": who or "—", "kind": kind, "title": title,
+                       "detail": detail, "attachments": attachments or [], "section": section})
+
+    add(matter.sent_at, matter.sent_by, "milestone", "Sent to the lawyers")
+    if matter.approved_at:
+        add(matter.approved_at, matter.approved_by, "milestone", "Approved — active with lawyers")
+
+    for s in matter.step_states.filter(done=True):
+        # Completed steps normally carry done_at; fall back so a step never
+        # silently vanishes from the history if the timestamp is missing.
+        add(s.done_at or matter.approved_at or matter.sent_at, s.done_by, "step",
+            legal_workflow.STEP_LABELS.get(s.step_key, s.step_key),
+            section=legal_workflow.step_section(s.step_key))
+
+    for c in matter.step_comments.prefetch_related("attachments").all():
+        add(c.created_at, c.author_name,
+            "route" if c.step_key == "_route" else "comment",
+            legal_workflow.STEP_LABELS.get(c.step_key, c.step_key),
+            detail=c.text,
+            attachments=[{"name": a.original_name or a.file.name.split("/")[-1], "url": a.file.url}
+                         for a in c.attachments.all()],
+            section=legal_workflow.step_section(c.step_key))
+
+    if matter.status == LegalMatter.CLOSED and matter.closed_at:
+        add(matter.closed_at, matter.closed_by, "milestone", "Closed / brought back from lawyers")
+
+    events.sort(key=lambda e: e["date"])
+    return events
+
+
+def _can_view_matter(user, matter):
+    """Whether a user may see a matter (lawyers/super work it; admins view active
+    ones for oversight)."""
+    if _can_work_legal(user) or _can_manage_legal(user):
+        return True
+    return user.is_administrator and matter.status == LegalMatter.ACTIVE
+
+
+@login_required
+def xero_legal_timeline(request, matter_id):
+    """HTML fragment: a matter's milestone timeline. Loaded on demand when a card
+    on the Lawyers page is expanded."""
+    tenant_id = _current_tenant_id(request)
+    if not tenant_id:
+        return HttpResponse(status=400)
+    matter = LegalMatter.objects.filter(tenant_id=tenant_id, id=matter_id).first()
+    if not matter or not _can_view_matter(request.user, matter):
+        return HttpResponse(status=404)
+    milestones = [e for e in _legal_timeline(matter) if e["kind"] in ("step", "milestone")]
+    return render(request, "xero/_legal_timeline.html",
+                  {"timeline": milestones, "matter": matter})
+
+
 @login_required
 def xero_legal(request):
     """The Lawyers page. Attorneys see active matters; admins also see pending
@@ -1738,7 +1808,9 @@ def xero_legal(request):
     litigation_keys = (legal_workflow.ALL_STEP_KEYS
                        - {t[0] for t in legal_workflow.COLLECTIONS})
 
-    # Per-matter quick progress (done / total across all currently-shown steps).
+    # Per-matter quick progress (done / total across all currently-shown steps),
+    # the always-visible milestone timeline, and a staleness flag.
+    now = timezone.now()
     active_pct = []
     not_in_litigation = 0
     for m in matters:
@@ -1750,12 +1822,34 @@ def xero_legal(request):
                            f"Application: {'Opposed' if m.application_opposed else 'Unopposed'}")
         # "Not yet in summons / application for payment" = no litigation step done.
         m.in_litigation = bool(done_keys & litigation_keys)
+        full_timeline = _legal_timeline(m)
+        # Milestone strip shows only workflow progress (completed steps + lifecycle
+        # milestones) — not comments or route clicks; full history is in the report.
+        m.milestones = [e for e in full_timeline if e["kind"] in ("step", "milestone")]
+        # Staleness still reacts to ANY activity, including new comments.
+        last = full_timeline[-1]["date"] if full_timeline else m.sent_at
+        m.days_idle = (now - last).days if last else 0
+        # Stale highlight applies to active matters being worked.
+        if m.status == LegalMatter.ACTIVE and last:
+            m.staleness = "stale" if m.days_idle >= 14 else ("warn" if m.days_idle >= 7 else "")
+        else:
+            m.staleness = ""
         if m.status == LegalMatter.ACTIVE:
             active_pct.append((m.progress_done / m.progress_total * 100) if m.progress_total else 0)
             if not m.in_litigation:
                 not_in_litigation += 1
 
     active_count = sum(1 for m in matters if m.status == LegalMatter.ACTIVE)
+
+    # Money the lawyers have recovered (invoices paid off on approved matters) — a
+    # team total, since matters aren't assigned to individual attorneys.
+    month_start = timezone.localtime(timezone.now()).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0)
+    legal_rec_qs = RecoveredInvoice.objects.filter(
+        tenant_id=tenant_id, credited=True, reason=RecoveredInvoice.REASON_COLLECTED_LEGAL)
+    kpi_recovered_month = legal_rec_qs.filter(recovered_at__gte=month_start).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    kpi_recovered_total = legal_rec_qs.aggregate(s=Sum("amount"))["s"] or Decimal(0)
+
     order = {LegalMatter.PENDING: 0, LegalMatter.ACTIVE: 1, LegalMatter.CLOSED: 2}
     matters.sort(key=lambda m: (order.get(m.status, 9), (m.contact_name or "").lower()))
     return render(request, "xero/legal.html", {
@@ -1769,6 +1863,8 @@ def xero_legal(request):
         "kpi_avg_completion": round(sum(active_pct) / len(active_pct)) if active_pct else 0,
         "kpi_not_in_litigation": not_in_litigation,
         "kpi_closed": sum(1 for m in matters if m.status == LegalMatter.CLOSED),
+        "kpi_recovered_month": kpi_recovered_month,
+        "kpi_recovered_total": kpi_recovered_total,
     })
 
 
@@ -1806,9 +1902,13 @@ def xero_legal_matter(request, matter_id):
         company_total += r.amount_due
         company_invoices.append({"inv": r, "events": _lifecycle_events(tenant_id, r.invoice_id)})
 
+    # The milestone strip shows only workflow progress (completed steps + lifecycle
+    # milestones); comments stay on their steps below and in the full report.
+    milestones = [e for e in _legal_timeline(matter) if e["kind"] in ("step", "milestone")]
     return render(request, "xero/legal_matter.html", {
         "matter": matter,
         "sections": _legal_workflow_sections(matter),
+        "timeline": milestones,
         "tracks": legal_workflow.TRACKS,
         "can_work": can_work,
         "is_manager": is_manager,
@@ -1872,6 +1972,7 @@ def xero_legal_step_comment(request, matter_id):
     matter = LegalMatter.objects.filter(tenant_id=tenant_id, id=matter_id).first()
     step_key = (request.POST.get("step_key") or "").strip()
     text = (request.POST.get("text") or "").strip()
+    nature = (request.POST.get("nature") or "").strip()[:120]
     files = request.FILES.getlist("documents")
     if (matter and _can_work_legal(request.user) and (text or files)
             and step_key in legal_workflow.ALL_STEP_KEYS):
@@ -1882,7 +1983,7 @@ def xero_legal_step_comment(request, matter_id):
         )
         for f in files:
             LegalStepCommentAttachment.objects.create(
-                comment=comment, file=f, original_name=f.name[:255])
+                comment=comment, file=f, original_name=f.name[:255], nature=nature)
     return redirect("xero_legal_matter", matter_id=matter_id)
 
 
@@ -2309,6 +2410,7 @@ def xero_add_comment(request, invoice_id):
         return JsonResponse({"error": "Not connected to Xero."}, status=400)
 
     text = (request.POST.get("text") or "").strip()
+    nature = (request.POST.get("nature") or "").strip()[:120]
     files = request.FILES.getlist("documents")
     if not text and not files:
         return JsonResponse({"error": "Add a comment or attach a document."}, status=400)
@@ -2327,7 +2429,8 @@ def xero_add_comment(request, invoice_id):
         comment_at=dt, text=text,
     )
     for f in files:
-        InvoiceCommentAttachment.objects.create(comment=comment, file=f, original_name=f.name[:255])
+        InvoiceCommentAttachment.objects.create(
+            comment=comment, file=f, original_name=f.name[:255], nature=nature)
     return JsonResponse({"ok": True})
 
 
@@ -2403,12 +2506,13 @@ def xero_company_report(request):
 
 @login_required
 def xero_filing(request):
-    """Filing index: every company on file, searchable, with a link to its
-    archive (invoices, comments, documents, legal history). Super Admin only."""
+    """Filing index: every company on file, searchable, with a document count and
+    a link to its archive (invoices, comments, documents, legal history).
+    Open to Super Admins and Lawyers."""
     tenant_id = _current_tenant_id(request)
     if not tenant_id:
         return redirect("xero_login")
-    if not request.user.is_super_admin:
+    if not (request.user.is_super_admin or request.user.is_lawyer):
         return redirect("xero_dashboard")
     q = (request.GET.get("q") or "").strip()
 
@@ -2435,11 +2539,38 @@ def xero_filing(request):
 
     legal_status_by_cid = {m.contact_id: m.get_status_display()
                            for m in LegalMatter.objects.filter(tenant_id=tenant_id)}
+
+    # Document count per company = invoice-comment attachments (mapped via the
+    # invoice -> contact) + legal-matter attachments.
+    from collections import defaultdict
+    from django.db.models import Count
+    doc_counts = defaultdict(int)
+    inv_to_key = {}
+    for s in (OpenInvoiceSnapshot.objects.filter(tenant_id=tenant_id)
+              .values("invoice_id", "contact_id", "contact_name")):
+        inv_to_key[s["invoice_id"]] = s["contact_id"] or s["contact_name"] or "Unknown"
+    for w in (WriteOffInvoice.objects.filter(tenant_id=tenant_id)
+              .values("invoice_id", "contact_id", "contact_name")):
+        inv_to_key.setdefault(w["invoice_id"], w["contact_id"] or w["contact_name"] or "Unknown")
+    for row in (InvoiceCommentAttachment.objects.filter(comment__tenant_id=tenant_id)
+                .values("comment__invoice_id").annotate(c=Count("id"))):
+        key = inv_to_key.get(row["comment__invoice_id"])
+        if key:
+            doc_counts[key] += row["c"]
+    for row in (LegalStepCommentAttachment.objects
+                .filter(comment__matter__tenant_id=tenant_id)
+                .values("comment__matter__contact_id", "comment__matter__contact_name")
+                .annotate(c=Count("id"))):
+        key = (row["comment__matter__contact_id"]
+               or row["comment__matter__contact_name"] or "Unknown")
+        doc_counts[key] += row["c"]
+
     rows = []
     for key, c in companies.items():
         if q and q.lower() not in (c["name"] or "").lower():
             continue
         c["legal_status"] = legal_status_by_cid.get(c["cid"], "")
+        c["doc_count"] = doc_counts.get(key, 0)
         rows.append(c)
     rows.sort(key=lambda c: (c["name"] or "").lower())
     return render(request, "xero/filing.html", {"companies": rows, "q": q, "total": len(rows)})
@@ -2448,11 +2579,12 @@ def xero_filing(request):
 @login_required
 def xero_filing_company(request):
     """One company's full archive: its invoices + lifecycle, every comment and
-    uploaded document, and its legal-matter history. Super Admin only."""
+    uploaded document, and its legal-matter history. Open to Super Admins and
+    Lawyers."""
     tenant_id = _current_tenant_id(request)
     if not tenant_id:
         return redirect("xero_login")
-    if not request.user.is_super_admin:
+    if not (request.user.is_super_admin or request.user.is_lawyer):
         return redirect("xero_dashboard")
     cid = (request.GET.get("cid") or "").strip()
     if not cid:
@@ -2484,7 +2616,7 @@ def xero_filing_company(request):
               .select_related("comment")):
         documents.append({
             "name": a.original_name or a.file.name.split("/")[-1],
-            "url": a.file.url, "when": a.uploaded_at,
+            "url": a.file.url, "when": a.uploaded_at, "nature": a.nature,
             "source": f"Invoice comment ({a.comment.invoice_id})",
             "author": a.comment.author_name,
         })
@@ -2496,7 +2628,7 @@ def xero_filing_company(request):
                   .filter(comment__matter=legal).select_related("comment")):
             documents.append({
                 "name": a.original_name or a.file.name.split("/")[-1],
-                "url": a.file.url, "when": a.uploaded_at,
+                "url": a.file.url, "when": a.uploaded_at, "nature": a.nature,
                 "source": "Legal document", "author": a.comment.author_name,
             })
     documents.sort(key=lambda d: d["when"] or timezone.now(), reverse=True)
@@ -2762,6 +2894,119 @@ def xero_refresh_now(request):
     return redirect("xero_aging_report")
 
 
+@super_admin_required
+def xero_lawyer_report(request):
+    """Settings page for the weekly lawyer progress report: turn it on/off, set
+    the frequency/day/time, manage recipient emails, preview, and send now."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    cfg = LawyerReportConfig.get_solo()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+
+        if action == "save_schedule":
+            cfg.enabled = request.POST.get("enabled") == "on"
+            freq = request.POST.get("frequency")
+            if freq in dict(LawyerReportConfig.FREQUENCY_CHOICES):
+                cfg.frequency = freq
+            try:
+                dow = int(request.POST.get("day_of_week") or 0)
+                if 0 <= dow <= 6:
+                    cfg.day_of_week = dow
+            except (ValueError, TypeError):
+                pass
+            try:
+                dom = int(request.POST.get("day_of_month") or 1)
+                if 1 <= dom <= 28:
+                    cfg.day_of_month = dom
+            except (ValueError, TypeError):
+                pass
+            raw = (request.POST.get("send_time") or "").strip()
+            try:
+                hh, mm = raw.split(":")
+                hh, mm = int(hh), int(mm)
+                if 0 <= hh <= 23 and 0 <= mm <= 59:
+                    cfg.send_hour, cfg.send_minute = hh, mm
+            except (ValueError, TypeError):
+                pass
+            cfg.updated_by = request.user.email
+            cfg.save()
+            messages.success(request, "Report schedule saved.")
+
+        elif action == "add_recipient":
+            email = (request.POST.get("email") or "").strip()
+            name = (request.POST.get("name") or "").strip()
+            if not email:
+                messages.error(request, "Enter an email address to add.")
+            else:
+                try:
+                    validate_email(email)
+                except ValidationError:
+                    messages.error(request, f"'{email}' is not a valid email address.")
+                else:
+                    _, created = ReportRecipient.objects.get_or_create(
+                        email=email, defaults={"name": name})
+                    messages.success(request, f"Added {email}." if created
+                                     else f"{email} is already a recipient.")
+
+        elif action == "remove_recipient":
+            ReportRecipient.objects.filter(pk=request.POST.get("recipient_id")).delete()
+            messages.success(request, "Recipient removed.")
+
+        elif action == "toggle_recipient":
+            r = ReportRecipient.objects.filter(pk=request.POST.get("recipient_id")).first()
+            if r:
+                r.is_active = not r.is_active
+                r.save(update_fields=["is_active"])
+
+        elif action == "send_now":
+            tenant_id = _current_tenant_id(request)
+            recipients = list(ReportRecipient.objects.filter(is_active=True)
+                              .values_list("email", flat=True))
+            if not tenant_id:
+                messages.error(request, "No Xero connection found.")
+            elif not recipients:
+                messages.error(request, "Add at least one active recipient first.")
+            else:
+                try:
+                    sent, _ = reports.send_lawyer_report(tenant_id)
+                    if sent:
+                        messages.success(request, f"Report sent to {len(recipients)} recipient"
+                                         f"{'' if len(recipients) == 1 else 's'}.")
+                    else:
+                        messages.warning(request, "Report could not be sent — check email setup.")
+                except Exception as exc:
+                    messages.error(request, f"Send failed: {exc}")
+
+        return redirect("xero_lawyer_report")
+
+    return render(request, "xero/lawyer_report.html", {
+        "cfg": cfg,
+        "recipients": ReportRecipient.objects.all(),
+        "frequency_choices": LawyerReportConfig.FREQUENCY_CHOICES,
+        "dow_choices": LawyerReportConfig.DOW_CHOICES,
+        "dom_range": range(1, 29),
+        "server_now": timezone.localtime(timezone.now()),
+    })
+
+
+@super_admin_required
+def xero_lawyer_report_preview(request):
+    """Render the report PDF inline in the browser, so the exact attachment can
+    be checked before sending."""
+    tenant_id = _current_tenant_id(request)
+    if not tenant_id:
+        return HttpResponse("No Xero connection found.", status=400)
+    ctx = reports.build_lawyer_report(
+        tenant_id, period_days=LawyerReportConfig.get_solo().period_days())
+    from .report_pdf import build_report_pdf
+    resp = HttpResponse(build_report_pdf(ctx), content_type="application/pdf")
+    resp["Content-Disposition"] = 'inline; filename="lawyer-report-preview.pdf"'
+    return resp
+
+
 def _month_label(key):
     from datetime import datetime
     try:
@@ -2775,8 +3020,44 @@ PIE_COLORS = ["#16a34a", "#0E7C7B", "#2563eb", "#d97706", "#dc2626", "#7c3aed"]
 CALL_SUPPRESS_DAYS = 7
 
 
-def _mom_line(mom, width=760, height=170, pad=26):
-    """Build SVG line-chart geometry for a month-over-month outstanding series."""
+def _abbr_money(v):
+    """Compact rand label for chart axes: R 1.2M / R 340k / R 0."""
+    v = float(v or 0)
+    a = abs(v)
+    if a >= 1_000_000:
+        return f"R {v / 1_000_000:.1f}M"
+    if a >= 1_000:
+        return f"R {v / 1_000:.0f}k"
+    return f"R {v:.0f}"
+
+
+def _nice_ceil(v):
+    """Round a max value up to a clean axis top (1/2/5 × 10^k) for tidy gridlines."""
+    import math
+    v = float(v or 0)
+    if v <= 0:
+        return 1.0
+    exp = math.floor(math.log10(v))
+    base = 10 ** exp
+    frac = v / base
+    nice = 1 if frac <= 1 else (2 if frac <= 2 else (5 if frac <= 5 else 10))
+    return nice * base
+
+
+def _y_ticks(top, plot_top, plot_bottom, n=4):
+    """Evenly-spaced horizontal axis ticks from 0 (bottom) to `top`, each with the
+    pixel y for the gridline, a text baseline y, and an abbreviated rand label."""
+    ticks = []
+    for i in range(n + 1):
+        frac = i / n
+        y = plot_bottom - frac * (plot_bottom - plot_top)
+        ticks.append({"y": round(y, 1), "ty": round(y + 3.5, 1),
+                      "label": _abbr_money(top * frac)})
+    return ticks
+
+
+def _mom_line(mom, width=760, height=210):
+    """Smoothed area-chart geometry for a month-over-month outstanding series."""
     from datetime import datetime as _dt
 
     def _short(k):
@@ -2786,19 +3067,32 @@ def _mom_line(mom, width=760, height=170, pad=26):
             return k
 
     items = sorted((k, v) for k, v in mom.items() if k != "No date")[-12:]
-    top = max((float(v) for _, v in items), default=0.0)
+    raw_top = max((float(v) for _, v in items), default=0.0)
+    top = _nice_ceil(raw_top) if raw_top else 1.0
     n = len(items)
-    plot_w, plot_h = width - 2 * pad, height - 2 * pad
+    pad_l, pad_r, pad_t, pad_b = 52, 16, 16, 26
+    plot_w = width - pad_l - pad_r
+    plot_h = height - pad_t - pad_b
+    plot_top, plot_bottom = pad_t, pad_t + plot_h
     pts = []
     for i, (k, v) in enumerate(items):
-        x = pad + (plot_w / (n - 1) * i if n > 1 else plot_w / 2)
-        y = pad + plot_h - (float(v) / top * plot_h if top else 0)
+        x = pad_l + (plot_w / (n - 1) * i if n > 1 else plot_w / 2)
+        y = plot_bottom - (float(v) / top * plot_h if top else 0)
         pts.append({"x": round(x, 1), "y": round(y, 1), "label": _month_label(k),
                     "short": _short(k), "amount": v})
+    points = " ".join(f"{p['x']},{p['y']}" for p in pts)
+    area = ""
+    if pts:
+        seg = " ".join(f"L {p['x']},{p['y']}" for p in pts)
+        area = f"M {pts[0]['x']},{round(plot_bottom, 1)} {seg} L {pts[-1]['x']},{round(plot_bottom, 1)} Z"
     return {
-        "points": " ".join(f"{p['x']},{p['y']}" for p in pts),
-        "dots": pts, "width": width, "height": height,
-        "baseline": round(height - pad, 1), "has_data": n > 0,
+        "points": points, "area": area, "dots": pts,
+        "width": width, "height": height,
+        "baseline": round(plot_bottom, 1),
+        "plot_left": pad_l, "plot_right": round(width - pad_r, 1),
+        "ylabel_x": pad_l - 8, "label_y": round(plot_bottom + 16, 1),
+        "yticks": _y_ticks(top, plot_top, plot_bottom),
+        "has_data": n > 0,
     }
 
 
@@ -2812,9 +3106,9 @@ def _recovered_by_month(qs):
     return out
 
 
-def _recovery_bars(out_mom, rec_mom, width=760, height=190, pad=30):
+def _recovery_bars(out_mom, rec_mom, width=760, height=230):
     """Grouped bar-chart geometry — per month, outstanding (red) vs recovered
-    (green) — for the last 12 months present in either series."""
+    (green) — for the last 12 months present in either series, with a value axis."""
     from datetime import datetime as _dt
 
     def _short(k):
@@ -2825,25 +3119,31 @@ def _recovery_bars(out_mom, rec_mom, width=760, height=190, pad=30):
 
     months = sorted(k for k in set(list(out_mom) + list(rec_mom)) if k != "No date")[-12:]
     series = [(m, float(out_mom.get(m, 0) or 0), float(rec_mom.get(m, 0) or 0)) for m in months]
-    top = max((max(o, r) for _, o, r in series), default=0.0) or 1.0
+    raw_top = max((max(o, r) for _, o, r in series), default=0.0)
+    top = _nice_ceil(raw_top) if raw_top else 1.0
     n = len(series)
-    plot_w, plot_h = width - 2 * pad, height - 2 * pad
-    baseline = pad + plot_h
+    pad_l, pad_r, pad_t, pad_b = 52, 16, 16, 26
+    plot_w = width - pad_l - pad_r
+    plot_h = height - pad_t - pad_b
+    plot_top, baseline = pad_t, pad_t + plot_h
     group_w = (plot_w / n) if n else plot_w
-    bar_w = min(group_w / 2 * 0.7, 24)
+    bar_w = min(group_w / 2 * 0.62, 22)
     bars = []
     for i, (m, o, r) in enumerate(series):
-        gx = pad + group_w * i + group_w / 2
+        gx = pad_l + group_w * i + group_w / 2
         oh = (o / top * plot_h) if top else 0
         rh = (r / top * plot_h) if top else 0
         bars.append({
             "label": _month_label(m), "short": _short(m), "lx": round(gx, 1),
             "out_amount": o, "rec_amount": r, "bw": round(bar_w, 1),
-            "ox": round(gx - bar_w - 1, 1), "oy": round(baseline - oh, 1), "oh": round(oh, 1),
-            "rx": round(gx + 1, 1), "ry": round(baseline - rh, 1), "rh": round(rh, 1),
+            "ox": round(gx - bar_w - 2, 1), "oy": round(baseline - oh, 1), "oh": round(oh, 1),
+            "rx": round(gx + 2, 1), "ry": round(baseline - rh, 1), "rh": round(rh, 1),
         })
     return {"bars": bars, "width": width, "height": height, "baseline": round(baseline, 1),
-            "label_y": round(baseline + 15, 1), "has_data": n > 0,
+            "plot_left": pad_l, "plot_right": round(width - pad_r, 1),
+            "ylabel_x": pad_l - 8, "label_y": round(baseline + 16, 1),
+            "yticks": _y_ticks(top, plot_top, baseline),
+            "has_data": n > 0,
             "out_total": sum(o for _, o, _ in series),
             "rec_total": sum(r for _, _, r in series)}
 
@@ -3000,6 +3300,11 @@ def xero_dashboard(request):
     def _rec_sum(qs):
         return qs.aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
+    # Recoveries credited to the lawyers (a team total — not attributed to any
+    # administrator). Surfaced on the Lawyers page and the system overview.
+    legal_qs = rec_qs.filter(reason=RecoveredInvoice.REASON_COLLECTED_LEGAL)
+    # An administrator's recovered figures are their COLLECTIONS only (legal-stage
+    # recoveries have no administrator, so this filter naturally excludes them).
     my_recovered_total = _rec_sum(rec_qs.filter(administrator_id=target_id)) if target_id else Decimal(0)
     my_recovered_month = _rec_sum(rec_qs.filter(administrator_id=target_id, recovered_at__gte=month_start)) if target_id else Decimal(0)
 
@@ -3043,8 +3348,17 @@ def xero_dashboard(request):
         rec_month_by_admin = {r["administrator_id"]: r["s"] for r in
                               rec_qs.filter(recovered_at__gte=month_start)
                               .values("administrator_id").annotate(s=Sum("amount"))}
+        # Cover every admin who EITHER has open allocated invoices OR recovered
+        # money — otherwise an admin who collected everything (no open invoices
+        # left) would vanish from the table and the per-admin figures wouldn't
+        # reconcile with the system totals.
+        zero_st = {"companies": set(), "total": Decimal(0), "calls": 0,
+                   "final": 0, "handover": 0, "missed": 0}
+        admin_ids = (set(admin_stats) | set(rec_total_by_admin)
+                     | set(rec_month_by_admin)) - {None}
         admin_overview = []
-        for aid, st in admin_stats.items():
+        for aid in admin_ids:
+            st = admin_stats.get(aid, zero_st)
             u = admin_map.get(aid)
             companies = len(st["companies"])
             admin_overview.append({
@@ -3056,7 +3370,7 @@ def xero_dashboard(request):
                 "recovered_month": rec_month_by_admin.get(aid) or Decimal(0),
                 "pct": (companies / max_clients * 100) if max_clients else 0,
             })
-        admin_overview.sort(key=lambda x: x["total"], reverse=True)
+        admin_overview.sort(key=lambda x: (x["total"], x["recovered_month"]), reverse=True)
 
         # Most effective collector this month (by money recovered).
         top_collector = None
@@ -3098,6 +3412,8 @@ def xero_dashboard(request):
             "admin_overview": admin_overview,
             "system_recovered_month": _rec_sum(rec_qs.filter(recovered_at__gte=month_start)),
             "system_recovered_total": _rec_sum(rec_qs),
+            "system_recovered_legal_month": _rec_sum(legal_qs.filter(recovered_at__gte=month_start)),
+            "system_recovered_legal_total": _rec_sum(legal_qs),
             "unallocated": sum(1 for cid in system_companies if cid not in cid_to_admin),
             "top_collector": top_collector,
             "legal_pending": legal_pending,

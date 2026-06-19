@@ -179,3 +179,45 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
+
+
+# ---------------------------------------------------------------------------
+# Email — sent via Microsoft Graph (app-only) from a shared mailbox
+# ---------------------------------------------------------------------------
+# All outbound mail (user onboarding, password resets, weekly reports, debtor
+# reminders) goes through the Microsoft Graph sendMail API using an Entra app
+# registration (client-credentials / Mail.Send application permission). This
+# avoids SMTP, mailbox licensing and the basic-auth SMTP retirement entirely.
+# A custom Django email backend routes EVERY Django email — including the
+# built-in password-reset mail — through Graph, so features just use the normal
+# Django mail helpers / xero_app.mailer.send_app_email().
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'xero_app.mail_backend.GraphEmailBackend')
+
+MS_GRAPH_TENANT_ID = os.environ.get('MS_GRAPH_TENANT_ID', '')
+MS_GRAPH_CLIENT_ID = os.environ.get('MS_GRAPH_CLIENT_ID', '')
+MS_GRAPH_CLIENT_SECRET = os.environ.get('MS_GRAPH_CLIENT_SECRET', '')
+# The mailbox (typically a shared mailbox) that mail is sent "from".
+MS_GRAPH_SENDER = os.environ.get('MS_GRAPH_SENDER', '')
+
+# Friendly From; Graph actually sends as MS_GRAPH_SENDER's mailbox identity.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', MS_GRAPH_SENDER or 'no-reply@localhost')
+SERVER_EMAIL = os.environ.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
+
+# Network timeout (seconds) for Graph token + sendMail calls.
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '20'))
+
+# True when Graph email credentials are fully present — features that only make
+# sense with live email (e.g. self-service password reset) can gate on this.
+EMAIL_ENABLED = bool(MS_GRAPH_TENANT_ID and MS_GRAPH_CLIENT_ID
+                     and MS_GRAPH_CLIENT_SECRET and MS_GRAPH_SENDER)
+
+# Password-reset links stay valid for this long (seconds; default 3 days).
+PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT', str(60 * 60 * 24 * 3)))
+
+# Default recipients for system reports (e.g. the weekly lawyer/management
+# digest) when a feature needs a fallback list. Comma-separated; optional.
+REPORT_RECIPIENTS = [e.strip() for e in os.environ.get('REPORT_RECIPIENTS', '').split(',') if e.strip()]
+
+# Public base URL used to build absolute links in emails (password-reset links,
+# report deep-links) since outbound mail has no incoming request to derive it.
+SITE_BASE_URL = os.environ.get('SITE_BASE_URL', 'http://localhost:8000').rstrip('/')

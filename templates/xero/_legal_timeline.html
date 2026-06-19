@@ -1,0 +1,19 @@
+{% comment %}Horizontal milestone timeline for one matter. Context: timeline, matter.{% endcomment %}
+{% if timeline %}
+<div class="tlh">
+    {% for e in timeline %}
+    <div class="tlh-node {{ e.kind }}" title="{{ e.date|date:'Y-m-d H:i' }} — {{ e.title }}{% if e.detail %}: {{ e.detail }}{% endif %} (by {{ e.who }})">
+        <span class="tlh-dot"></span>
+        <div class="tlh-info">
+            <div class="tlh-date">{{ e.date|date:"M j, Y" }}</div>
+            <div class="tlh-title">{% if e.kind == 'step' %}&#10003;{% elif e.kind == 'milestone' %}&#9873;{% elif e.kind == 'route' %}&#8646;{% else %}&#128172;{% endif %} {{ e.title|truncatechars:36 }}</div>
+            {% if e.detail %}<div class="tlh-detail">{{ e.detail|truncatechars:52 }}</div>{% endif %}
+            {% if e.attachments %}<div class="tlh-att">{% for a in e.attachments %}<a href="{{ a.url }}" target="_blank" rel="noopener" title="{{ a.name }}">&#128206;</a>{% endfor %}</div>{% endif %}
+            <div class="tlh-who">{{ e.who }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="muted" style="margin:4px 0 0; font-size:12px;">No activity recorded on this matter yet.</p>
+{% endif %}

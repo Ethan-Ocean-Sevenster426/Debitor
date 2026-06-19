@@ -21,6 +21,7 @@
     .doc-table th { background: #f5fbfb; color: #5a8a8a; text-align: left; padding: 7px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
     .doc-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f2; }
     .doc-table a { color: #1e40af; text-decoration: none; font-weight: 600; }
+    .doc-nature { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
     .leg-step { border: 1px solid #eef2f7; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
     .leg-step .lbl { font-weight: 600; color: #1f2937; }
     .leg-c { font-size: 12.5px; color: #475569; margin: 4px 0 0 8px; }
@@ -42,11 +43,12 @@
         <h2>&#128194; Documents ({{ documents|length }})</h2>
         {% if documents %}
         <table class="doc-table">
-            <thead><tr><th>Document</th><th>Source</th><th>Uploaded by</th><th>When</th></tr></thead>
+            <thead><tr><th>Document</th><th>Nature</th><th>Source</th><th>Uploaded by</th><th>Date uploaded</th></tr></thead>
             <tbody>
                 {% for d in documents %}
                 <tr>
                     <td><a href="{{ d.url }}" target="_blank" rel="noopener">&#128206; {{ d.name }}</a></td>
+                    <td>{% if d.nature %}<span class="doc-nature">{{ d.nature }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td>{{ d.source }}</td>
                     <td>{{ d.author|default:"—" }}</td>
                     <td>{{ d.when|date:"Y-m-d H:i" }}</td>

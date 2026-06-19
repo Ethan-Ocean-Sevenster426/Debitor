@@ -5,7 +5,6 @@ from django.db import models
 class Role(models.TextChoices):
     SUPER_ADMIN = 'super_admin', 'Super Admin'
     ADMINISTRATOR = 'administrator', 'Administrator'
-    INSPECTOR = 'inspector', 'Inspector'
     LAWYER = 'lawyer', 'Lawyer'
 
 
@@ -43,10 +42,13 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     username = None
     email = models.EmailField('email address', unique=True)
+    # No default role: a user has NO access until a Super Admin assigns one
+    # (the invite / add-user forms always set it). Blank = no access.
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
-        default=Role.INSPECTOR,
+        blank=True,
+        default='',
     )
 
     USERNAME_FIELD = 'email'
@@ -71,9 +73,11 @@ class User(AbstractUser):
         return self.role == Role.ADMINISTRATOR
 
     @property
-    def is_inspector(self):
-        return self.role == Role.INSPECTOR
-
-    @property
     def is_lawyer(self):
         return self.role == Role.LAWYER
+
+    @property
+    def is_pending_invite(self):
+        """An invited user who hasn't accepted yet: inactive with no usable
+        password set."""
+        return not self.is_active and not self.has_usable_password()

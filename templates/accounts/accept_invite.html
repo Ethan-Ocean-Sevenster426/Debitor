@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Accept Invite - FSA Debtor System{% endblock %}
+{% block container_class %}auth-container{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="auth-header">
+        <img src="{% static 'img/fsa-logo.png' %}" alt="Food Safety Agency" class="auth-logo">
+        <h2>Debtor System</h2>
+        {% if invalid %}
+        <p>Invitation</p>
+        {% else %}
+        <p>Set a password to activate your account</p>
+        {% endif %}
+    </div>
+
+    {% if invalid %}
+    <div class="alert alert-error">
+        This invitation link is invalid or has expired. Please ask an administrator to send you a new invite.
+    </div>
+    <a class="auth-button" href="{% url 'login' %}" style="display:block; text-align:center; text-decoration:none;">Go to sign in</a>
+    {% else %}
+    <p class="muted" style="text-align:center; margin-top:-6px;">{{ invited_user.email }} &middot; {{ invited_user.get_role_display }}</p>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-error">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" class="auth-form" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="muted" style="font-size:12px; margin-top:4px;">{{ field.help_text|safe }}</div>{% endif %}
+            {% for error in field.errors %}<div class="alert alert-error" style="margin-top:6px;">{{ error }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="auth-button">Activate account</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

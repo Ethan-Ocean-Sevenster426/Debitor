@@ -3,9 +3,12 @@
 Use this script to verify the system end-to-end once it is on the cloud server.
 
 **Before you start, create three test logins** (under **Users**, as Super Admin):
-a **Super Admin**, an **Administrator**, and a **Lawyer**. Allocate at least one
-debtor to the Administrator (Super Admin → Debtors Action → expand a debtor →
-*Allocated to*). Make sure at least one sync has run so there's data.
+a **Super Admin**, an **Administrator**, and a **Lawyer**. (These are the only three
+roles — *Inspector* has been removed.) Create at least one of them with **Invite User**
+so the invite email flow is exercised (§20). Allocate at least one debtor to the
+Administrator (Super Admin → Debtors Action → expand a debtor → *Allocated to*). Make
+sure at least one sync has run so there's data, and that **email is configured** on
+the server (so invites, resets and the lawyer report actually send — see §21).
 
 For each test, mark **Pass / Fail** and note anything unexpected.
 
@@ -41,8 +44,8 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 | # | Action | SA | AD | LW | P/F |
 |---|--------|----|----|----|-----|
 | 2.1 | See **Closed Debtors / Write-offs / Handover** in the nav | ✅ | ❌ | ❌ | |
-| 2.2 | See **Filing** in the nav | ✅ | ❌ | ❌ | |
-| 2.3 | See **Users / Schedule / Communication Setup** | ✅ | ❌ | ❌ | |
+| 2.2 | See **Filing** in the nav | ✅ | ❌ | ✅ | |
+| 2.3 | See **Users / Schedule / Lawyer Report / Communication Setup** | ✅ | ❌ | ❌ | |
 | 2.4 | See **Lawyers** page | ✅ | ✅ (view) | ✅ | |
 | 2.5 | See **Dashboard / Debtors Action** | ✅ | ✅ | ❌ (redirects to Lawyers) | |
 | 2.6 | **Mark closed / Write off / Mark for handover** buttons visible | ✅ | ❌ | ❌ | |
@@ -51,6 +54,8 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 | 2.9 | Tick legal steps / comment / upload on a matter | ✅ | ❌ (read-only) | ✅ | |
 | 2.10 | AD opens `…/xero/filing/` directly in the URL | — | Redirected away (no access) | — | |
 | 2.11 | LW opens `…/xero/aging/` directly | — | — | Redirected to Lawyers page | |
+| 2.12 | LW opens **Filing** (nav + a company file) | — | — | Opens normally (Lawyers may use Filing) | |
+| 2.13 | Confirm the role dropdown (Users) has **no Inspector** option | Only Super Admin / Administrator / Lawyer | — | — | |
 
 ---
 
@@ -125,7 +130,7 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 |---|-------|-----------------|-----|
 | 8.1 | Expand an invoice's lifecycle (click the invoice row) | Timeline + "Add a comment" box appears | |
 | 8.2 | Add a comment with the date picker | Comment appears in the timeline | |
-| 8.3 | Attach one or more documents to a comment | Documents save and are downloadable from the timeline | |
+| 8.3 | Attach a document **and fill in "Nature of file"** (e.g. *Proof of payment*) | Document saves, downloadable from the timeline; the nature is recorded (see it in Filing, §16) | |
 
 ---
 
@@ -192,7 +197,7 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 | 14.1 | Open an active matter | Shows **Collections → Summons → Application for payment** in sequence | |
 | 14.2 | Outstanding invoices panel | Shows the company's invoices + their comments; **Full company report** opens | |
 | 14.3 | Tick several steps | Saved; ticks persist; progress bar updates | |
-| 14.4 | Add a comment on a step + **attach a document** | Comment + downloadable document appear under that step | |
+| 14.4 | Add a comment on a step + **attach a document with a "Nature"** (e.g. *Summons*) | Comment + downloadable document appear under that step; nature recorded (visible in Filing, §16) | |
 | 14.5 | On Summons, click **Switch to Opposed** | Summons branch swaps to the Opposed steps; existing ticks/comments preserved | |
 | 14.6 | Switch Application independently | Each route has its own Unopposed/Opposed state | |
 | 14.7 | As AD, open the same matter | **Read-only** — no checkboxes / comment box | |
@@ -213,16 +218,18 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 
 ---
 
-## 16. Filing / Archive (SA only)
+## 16. Filing / Archive (SA + Lawyer)
 
 | # | Steps | Expected result | P/F |
 |---|-------|-----------------|-----|
 | 16.1 | SA → **Filing** | Searchable list of every company (incl. closed) | |
-| 16.2 | Search a company; open its file | Shows **Documents** (all uploads in one place), invoices + activity, and legal history | |
-| 16.3 | Check the **Documents** list | Includes BOTH invoice-comment attachments AND **lawyer-uploaded legal documents** (labelled "Legal document") | |
-| 16.4 | Check **Legal history** | Shows the lawyers' step **comments** and the documents attached to them | |
-| 16.5 | Click a document | Downloads / opens correctly | |
-| 16.6 | Open a closed/archived company | Its data is still accessible | |
+| 16.2 | Check the **Files** column | Shows a 📎 document count per company; matches the number of documents on that company's file | |
+| 16.3 | Search a company; open its file | Shows **Documents** (all uploads in one place), invoices + activity, and legal history | |
+| 16.4 | Check the **Documents** table | Has a **Nature** column and a **Date uploaded** column; the nature you set in §8.3 / §14.4 shows here | |
+| 16.5 | Check the **Documents** list | Includes BOTH invoice-comment attachments AND **lawyer-uploaded legal documents** (labelled "Legal document") | |
+| 16.6 | Click a document | Downloads / opens correctly | |
+| 16.7 | Open a closed/archived company | Its data is still accessible | |
+| 16.8 | Log in as **LW** → open **Filing** and a company file | Accessible (lawyers may use Filing); document counts + natures show | |
 
 ---
 
@@ -247,7 +254,50 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 
 ---
 
-## 19. Sign-off
+## 19. Email & links setup (SA / deploy) — do this early
+
+| # | Steps | Expected result | P/F |
+|---|-------|-----------------|-----|
+| 19.1 | On the server, run `python manage.py send_test_email you@yourdomain` | Prints the backend + sender; a real test email arrives in your inbox | |
+| 19.2 | If it fails with `403` | Fix: app registration needs **Mail.Send** application permission **with admin consent** (see README §6); re-test | |
+| 19.3 | Open any system email (e.g. the test invite below) and inspect a link | The link points at the **live server URL** (`https://…`), **not** `localhost` | |
+| 19.4 | If a link points at `localhost` | Set **`SITE_BASE_URL`** to the public URL in `.env` and restart (README §7); re-test | |
+
+---
+
+## 20. User invites & password reset (email)
+
+| # | Steps | Expected result | P/F |
+|---|-------|-----------------|-----|
+| 20.1 | SA → Users → **Invite User**: name, email, pick a **role**, send | "Invite sent" message; the new user appears with an **Invited** badge | |
+| 20.2 | Open the invite email (to that address) | Contains a "Set your password" link pointing at the **live** site | |
+| 20.3 | Click the link → set a password | Account activates and you're signed in as that user with the chosen role | |
+| 20.4 | Click the **same invite link again** | Rejected as already used / expired | |
+| 20.5 | SA → Users → a still-pending invite → **Resend invite** | A fresh invite email is sent | |
+| 20.6 | Log out → login page → **Forgot your password?** → enter a real user's email | "If an account exists…" confirmation; a reset email arrives | |
+| 20.7 | Click the reset link → set a new password | "Password updated"; you can sign in with the new password | |
+| 20.8 | Reuse the reset link | Rejected (invalid / expired) | |
+
+---
+
+## 21. Weekly lawyer report & new-client alert (SA)
+
+| # | Steps | Expected result | P/F |
+|---|-------|-----------------|-----|
+| 21.1 | SA → **Lawyer Report** | Schedule controls + a Recipients list | |
+| 21.2 | **Add recipient(s)** (your email) | Appears in the list as Active; **Pause/Resume** and **Remove** work | |
+| 21.3 | **Preview report** | Opens the report **PDF** in the browser | |
+| 21.4 | Check the PDF content | KPI tiles (active, new, avg completion, in-litigation, idle 7+/14+, recovered); a "Newly handed over" table; an "Active matters" table with progress, stage and **last worked on**; **no "pending approval"** anywhere | |
+| 21.5 | Check **severity colours** | Active matters idle 14+ days are red, 7–13 days amber, else green; legend present | |
+| 21.6 | Click a **company link** in the PDF | Opens that matter on the live site (confirms `SITE_BASE_URL`) | |
+| 21.7 | **Send now** | The report is emailed (PDF attached) to the recipients; "sent" message | |
+| 21.8 | Set **frequency/day/time**, tick **enabled**, save | Saved; "last sent" + schedule reflect your choice | |
+| 21.9 | New-client alert: SA approves a pending matter (§13.4) | The Lawyer Report recipients get a "**new client needs attention**" email with a link to the matter | |
+| 21.10 | (Server) `python manage.py send_lawyer_report` when not due | Prints "not due — skipping"; `--force` sends immediately | |
+
+---
+
+## 22. Sign-off
 
 | Role | Tester | Date | Result |
 |------|--------|------|--------|
@@ -255,5 +305,5 @@ Legend: **SA** = Super Admin · **AD** = Administrator · **LW** = Lawyer.
 | Administrator |  |  |  |
 | Lawyer |  |  |  |
 
-All critical (permissions, sync, contact logging, legal workflow, recovery)
-sections must pass before go-live.
+All critical (permissions, sync, contact logging, legal workflow, recovery, **email
+invites/resets**, **report links**) sections must pass before go-live.

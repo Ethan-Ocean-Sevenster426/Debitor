@@ -27,22 +27,34 @@
     .call-tag { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #fff4e5; color: #b45309; }
     .data-table th.num, .data-table td.num { text-align: right; }
 
-    .line-chart { width: 100%; height: auto; }
-    .line-chart .axis { stroke: #e5e7eb; stroke-width: 1; }
-    .line-chart .lbl { fill: #9ca3af; font-size: 8.5px; }
-    .line-chart .area { fill: rgba(14,124,123,.08); }
+    /* ---- Charts ---- */
+    .chart-panel { background: #fff; border: 1px solid #eef2f4; border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 1px 3px rgba(15,23,42,.04); }
+    .chart-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; }
+    .chart-head h3 { margin: 0; font-size: 14px; color: var(--navy); }
+    .chart-sub { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; }
+    .chartsvg { width: 100%; height: auto; display: block; overflow: visible; }
+    .chartsvg .grid { stroke: #eef2f4; stroke-width: 1; }
+    .chartsvg .ytick { fill: #94a3b8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
+    .chartsvg .xtick { fill: #64748b; font-size: 10px; }
+    .chartsvg rect { transition: opacity .12s; }
+    .chartsvg rect:hover { opacity: .82; }
 
-    .bar-chart .axis { stroke: #e5e7eb; stroke-width: 1; }
-    .bar-chart rect:hover { opacity: .85; }
-    .bar-legend { display: flex; gap: 20px; font-size: 12.5px; color: #475569; margin-top: 6px; }
+    .bar-legend { display: flex; gap: 20px; flex-wrap: wrap; font-size: 12.5px; color: #475569; margin-top: 8px; }
     .bar-legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
 
-    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; align-items: start; }
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; align-items: stretch; }
     @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
-    .pie { width: 170px; height: 170px; border-radius: 50%; margin: 0 auto; }
+
+    /* Donut: invoices-by-age */
+    .donut-wrap { display: flex; justify-content: center; padding: 6px 0 2px; }
+    .donut { position: relative; width: 168px; height: 168px; border-radius: 50%; }
+    .donut-hole { position: absolute; inset: 34px; background: #fff; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px #eef2f4; }
+    .donut-total { font-size: 28px; font-weight: 800; color: var(--navy); line-height: 1; font-variant-numeric: tabular-nums; }
+    .donut-cap { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; margin-top: 3px; }
     .pie-legend { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12.5px; }
-    .pie-legend li { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .pie-legend .sw { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+    .pie-legend li { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .pie-legend li.zero { opacity: .45; }
+    .pie-legend .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
     .pie-legend .ct { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
     .alloc-bar-row { display: grid; grid-template-columns: 150px 1fr 50px; align-items: center; gap: 12px; margin-bottom: 7px; font-size: 13px; }
@@ -85,23 +97,25 @@
         <a class="status-tile missed" href="{% url 'xero_aging_report' %}?stage=missed"><div class="label">&#9888; Missed calls</div><div class="value">{{ system_missed }}</div><div class="hint">view &rarr;</div></a>
         <a class="status-tile warn" href="{% url 'xero_aging_report' %}?stage=final"><div class="label">At final demand</div><div class="value">{{ system_final }}</div><div class="hint">view &rarr;</div></a>
         <a class="status-tile danger" href="{% url 'xero_aging_report' %}?stage=handover"><div class="label">At handover</div><div class="value">{{ system_handover }}</div><div class="hint">view &rarr;</div></a>
-        <div class="status-tile recovered"><div class="label">&#128176; Recovered this month</div><div class="value">R&nbsp;{{ system_recovered_month|floatformat:2|intcomma }}</div><div class="hint">all-time R {{ system_recovered_total|floatformat:2|intcomma }}</div></div>
+        <div class="status-tile recovered"><div class="label">&#128176; Recovered this month</div><div class="value">R&nbsp;{{ system_recovered_month|floatformat:2|intcomma }}</div><div class="hint">all-time R {{ system_recovered_total|floatformat:2|intcomma }}{% if system_recovered_legal_month %} &middot; R {{ system_recovered_legal_month|floatformat:2|intcomma }} via lawyers{% endif %}</div></div>
         <div class="status-tile"><div class="label">Unallocated companies</div><div class="value">{{ unallocated }}</div></div>
     </div>
 
     <div class="charts-row" style="margin-top:20px;">
-        <div>
-            <h3 class="mt-0">Outstanding by invoice month</h3>
+        <div class="chart-panel">
+            <div class="chart-head"><h3>Outstanding by invoice month</h3><span class="chart-sub">last 12 months</span></div>
             {% include "xero/_linechart.html" with chart=system_mom_chart %}
         </div>
-        <div>
-            <h3 class="mt-0">Invoices by age</h3>
+        <div class="chart-panel">
+            <div class="chart-head"><h3>Invoices by age</h3></div>
             {% include "xero/_pie.html" with pie=system_pie %}
         </div>
     </div>
 
-    <h3 style="margin:22px 0 6px;">Recovered vs outstanding (month over month)</h3>
-    {% include "xero/_barchart.html" with bars=system_recovery_bars %}
+    <div class="chart-panel" style="margin-top:18px;">
+        <div class="chart-head"><h3>Recovered vs outstanding</h3><span class="chart-sub">month over month</span></div>
+        {% include "xero/_barchart.html" with bars=system_recovery_bars %}
+    </div>
 </div>
 
 {# ---- Action items + lawyers overview ---- #}
@@ -196,18 +210,20 @@
     </div>
 
     <div class="charts-row" style="margin-top:20px;">
-        <div>
-            <h3 class="mt-0">Outstanding by invoice month</h3>
+        <div class="chart-panel">
+            <div class="chart-head"><h3>Outstanding by invoice month</h3><span class="chart-sub">last 12 months</span></div>
             {% include "xero/_linechart.html" with chart=my_mom_chart %}
         </div>
-        <div>
-            <h3 class="mt-0">Invoices by age</h3>
+        <div class="chart-panel">
+            <div class="chart-head"><h3>Invoices by age</h3></div>
             {% include "xero/_pie.html" with pie=my_pie %}
         </div>
     </div>
 
-    <h3 style="margin:22px 0 6px;">Recovered vs outstanding (month over month)</h3>
-    {% include "xero/_barchart.html" with bars=my_recovery_bars %}
+    <div class="chart-panel" style="margin-top:18px;">
+        <div class="chart-head"><h3>Recovered vs outstanding</h3><span class="chart-sub">month over month</span></div>
+        {% include "xero/_barchart.html" with bars=my_recovery_bars %}
+    </div>
 
     {% if my_priority %}
     <h3 style="margin:22px 0 6px;">&#11088; Priority debtors</h3>
