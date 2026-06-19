@@ -21,7 +21,7 @@ This guide is for a backend developer deploying the app to a cloud server.
 | Part | Detail |
 |------|--------|
 | Language / framework | Python 3.14, **Django 6.0** |
-| Database | **Microsoft SQL Server** (database name `FSA_Debtors`) via `mssql-django` + `pyodbc` (OS needs **ODBC Driver 18 for SQL Server**) |
+| Database | **SQL Server** (default) via `mssql-django` + `pyodbc` (OS needs **ODBC Driver 18 for SQL Server**), **or PostgreSQL** — selected by `DB_ENGINE` (`mssql` / `postgresql`). DB name `FSA_Debtors`. |
 | External API (in) | **Xero** (OAuth 2.0; read-only accounting scopes) — invoice data |
 | External API (out) | **Microsoft Graph** (`sendMail`, app-only) — all outbound email |
 | Background jobs | Hourly **`manage.py sync_xero`** (Xero → SQL); hourly **`manage.py send_lawyer_report`** (self-gated weekly report) |
@@ -66,11 +66,12 @@ The app reads configuration from environment variables (or a `.env` file next to
 | `DJANGO_DEBUG` | yes | **`False`** in production |
 | `DJANGO_ALLOWED_HOSTS` | yes | Comma-separated, e.g. `debtors.example.com` |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | yes | e.g. `https://debtors.example.com` |
-| `DB_SERVER` | yes | SQL Server host |
+| `DB_ENGINE` | optional | `mssql` (default) or `postgresql`. For Postgres, `pip install "psycopg[binary]"`. |
+| `DB_SERVER` | yes | DB host |
 | `DB_NAME` | yes | `FSA_Debtors` |
-| `DB_PORT` | usually | `1433` |
-| `DB_USER` / `DB_PASSWORD` | yes (cloud) | SQL auth login. **Leave blank only** for local Windows trusted auth. |
-| `DB_DRIVER` | optional | Defaults to `ODBC Driver 18 for SQL Server` |
+| `DB_PORT` | usually | `1433` (mssql) / `5432` (postgresql) |
+| `DB_USER` / `DB_PASSWORD` | yes (cloud) | DB login. **Leave blank only** for local Windows (mssql) trusted auth. |
+| `DB_DRIVER` | optional (mssql) | Defaults to `ODBC Driver 18 for SQL Server` |
 
 ### Email + links (NEW — see §6, §7)
 | Variable | Required | Notes |
