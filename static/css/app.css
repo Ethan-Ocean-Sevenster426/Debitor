@@ -96,6 +96,46 @@ a:hover { text-decoration: underline; }
 }
 .navbar-logout:hover { background: rgba(255, 255, 255, 0.28); }
 
+/* Hamburger toggle — hidden on wide screens, shown when the nav collapses. */
+.navbar-toggle {
+  display: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.navbar-toggle:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Collapse the link bar into a toggle dropdown once the items would crowd the
+   row (super admins have the most items, so this triggers fairly wide). */
+@media (max-width: 1200px) {
+  .navbar-top { flex-wrap: wrap; height: auto; min-height: 60px; padding: 10px 18px; gap: 10px; }
+  .navbar-brand { margin-right: auto; }
+  .navbar-toggle { display: inline-block; order: 1; }
+  .navbar-right { order: 2; }
+  .navbar-links {
+    order: 10;            /* wrap onto its own full-width row */
+    flex: 0 0 100%;
+    flex-direction: column;
+    gap: 2px;
+    display: none;        /* hidden until the hamburger is tapped */
+    padding-bottom: 6px;
+  }
+  .navbar.open .navbar-links { display: flex; }
+  .navbar-links a { padding: 11px 14px; }
+}
+
+/* Phones: reclaim space by dropping the role chip and truncating a long name. */
+@media (max-width: 560px) {
+  .navbar-top { padding: 10px 14px; }
+  .navbar-role { display: none; }
+  .navbar-user { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 /* ---------- Page layout ---------- */
 .page-container {
   padding: 18px 24px;
