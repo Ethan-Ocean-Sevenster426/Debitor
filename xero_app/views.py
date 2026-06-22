@@ -7,7 +7,7 @@ import requests
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 from datetime import datetime, date, timedelta
 
 from django.shortcuts import redirect, render
@@ -726,12 +726,12 @@ def _whatsapp_options(templates, number, fields):
     out = []
     for t in templates:
         text = _render_wa_message(t.body or DEFAULT_WA_TEMPLATE, **fields)
-        url = "https://wa.me/%s?%s" % (number, urlencode({"text": text}))
+        url = "https://wa.me/%s?%s" % (number, urlencode({"text": text}, quote_via=quote))
         out.append({"id": t.id, "label": t.name, "url": url})
     if not out:
         text = _render_wa_message(DEFAULT_WA_TEMPLATE, **fields)
         out.append({"id": 0, "label": "Standard reminder",
-                    "url": "https://wa.me/%s?%s" % (number, urlencode({"text": text}))})
+                    "url": "https://wa.me/%s?%s" % (number, urlencode({"text": text}, quote_via=quote))})
     return out
 
 
@@ -744,13 +744,13 @@ def _email_options(templates, address, fields):
     for t in templates:
         subject = _render_wa_message(t.subject or DEFAULT_EMAIL_SUBJECT, **fields)
         body = _render_wa_message(t.body or DEFAULT_EMAIL_BODY, **fields)
-        url = "mailto:%s?%s" % (address, urlencode({"subject": subject, "body": body}))
+        url = "mailto:%s?%s" % (address, urlencode({"subject": subject, "body": body}, quote_via=quote))
         out.append({"id": t.id, "label": t.name, "url": url})
     if not out:
         subject = _render_wa_message(DEFAULT_EMAIL_SUBJECT, **fields)
         body = _render_wa_message(DEFAULT_EMAIL_BODY, **fields)
         out.append({"id": 0, "label": "Standard reminder",
-                    "url": "mailto:%s?%s" % (address, urlencode({"subject": subject, "body": body}))})
+                    "url": "mailto:%s?%s" % (address, urlencode({"subject": subject, "body": body}, quote_via=quote))})
     return out
 
 
