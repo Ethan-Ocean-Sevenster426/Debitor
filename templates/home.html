@@ -9,9 +9,11 @@
     <a class="btn btn-primary" href="{% url 'xero_dashboard' %}">Go to Dashboard</a>
 </div>
 
+{% if user.is_super_admin and not xero_connected %}
 <div class="page-card">
     <h2>Xero Connection</h2>
-    <p class="muted">Connect or re-authorise the Xero account that feeds the hourly data sync.</p>
+    <p class="muted">No Xero account is connected. Connect the account that feeds the hourly data sync.</p>
     <a class="btn btn-secondary" href="{% url 'xero_login' %}">Connect to Xero</a>
 </div>
+{% endif %}
 {% endblock %}

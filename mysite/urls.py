@@ -23,7 +23,14 @@ from django.shortcuts import render
 
 @login_required
 def home(request):
-    return render(request, 'home.html')
+    # The Xero connection is managed once on the backend and persists across
+    # sessions, so the home page only surfaces a "Connect to Xero" prompt to a
+    # Super Admin when no connection exists (a recovery path). Everyone else, and
+    # the normal connected state, never see it.
+    from xero_app.models import XeroConnection
+    return render(request, 'home.html', {
+        'xero_connected': XeroConnection.objects.exists(),
+    })
 
 urlpatterns = [
     path('', home, name='home'),
