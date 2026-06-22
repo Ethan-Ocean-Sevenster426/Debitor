@@ -38,7 +38,7 @@ from .xero_client import (fetch_invoice_history, fetch_contact, clean_contact,
 from . import outreach
 from . import reports
 from . import notifications
-from accounts.decorators import super_admin_required
+from accounts.decorators import super_admin_required, role_required
 
 User = get_user_model()
 
@@ -2734,11 +2734,11 @@ def _ensure_one_default(channel):
             t.save(update_fields=["is_default"])
 
 
-@super_admin_required
+@role_required('administrator')
 def xero_communication_setup(request):
     """Manage the email & WhatsApp reminder templates (multiple per channel, one
     default each) offered as a dropdown next to the per-invoice Email / WhatsApp
-    buttons. Super-admin only."""
+    buttons. Super admins and administrators."""
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
         channel = (request.POST.get("channel") or "").strip()

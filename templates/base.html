@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}FSA Debtor System{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=7">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=8">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -17,8 +17,6 @@
                 <img class="navbar-logo" src="{% static 'img/fsa-logo.png' %}" alt="FSA">
                 DEBTOR SYSTEM
             </a>
-            <button type="button" class="navbar-toggle" aria-label="Toggle menu"
-                    onclick="document.querySelector('.navbar').classList.toggle('open')">&#9776;</button>
             <div class="navbar-links">
                 {% if not user.is_lawyer %}
                 <a href="{% url 'xero_dashboard' %}" class="{% if request.resolver_match.url_name == 'xero_dashboard' %}active{% endif %}">Dashboard</a>
@@ -35,11 +33,13 @@
                 {% if user.is_super_admin or user.is_lawyer %}
                 <a href="{% url 'xero_filing' %}" class="{% if 'filing' in request.resolver_match.url_name %}active{% endif %}">Filing</a>
                 {% endif %}
+                {% if user.is_super_admin or user.is_administrator %}
+                <a href="{% url 'xero_communication_setup' %}" class="{% if request.resolver_match.url_name == 'xero_communication_setup' %}active{% endif %}">Communication Setup</a>
+                {% endif %}
                 {% if user.is_super_admin %}
                 <a href="{% url 'user_list' %}" class="{% if 'user' in request.resolver_match.url_name %}active{% endif %}">Users</a>
                 <a href="{% url 'xero_schedule' %}" class="{% if request.resolver_match.url_name == 'xero_schedule' %}active{% endif %}">Schedule</a>
                 <a href="{% url 'xero_lawyer_report' %}" class="{% if 'lawyer_report' in request.resolver_match.url_name %}active{% endif %}">Lawyer Report</a>
-                <a href="{% url 'xero_communication_setup' %}" class="{% if request.resolver_match.url_name == 'xero_communication_setup' %}active{% endif %}">Communication Setup</a>
                 <a href="{% url 'xero_manual' %}" class="{% if request.resolver_match.url_name == 'xero_manual' %}active{% endif %}">Manual</a>
                 {% endif %}
             </div>
