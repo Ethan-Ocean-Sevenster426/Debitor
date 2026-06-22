@@ -19,18 +19,17 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth.decorators import login_required
 from django.urls import path, include
-from django.shortcuts import render
+from django.shortcuts import redirect
 
 @login_required
 def home(request):
-    # The Xero connection is managed once on the backend and persists across
-    # sessions, so the home page only surfaces a "Connect to Xero" prompt to a
-    # Super Admin when no connection exists (a recovery path). Everyone else, and
-    # the normal connected state, never see it.
-    from xero_app.models import XeroConnection
-    return render(request, 'home.html', {
-        'xero_connected': XeroConnection.objects.exists(),
-    })
+    # Drop users straight into their main workspace instead of a landing page.
+    # Lawyers work from the Lawyers page; everyone else starts on the Dashboard.
+    # (If Xero is somehow not connected, the Dashboard itself routes a Super Admin
+    # to the connect flow, so the recovery path is preserved.)
+    if request.user.is_lawyer:
+        return redirect('xero_legal')
+    return redirect('xero_dashboard')
 
 urlpatterns = [
     path('', home, name='home'),
