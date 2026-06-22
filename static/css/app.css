@@ -46,9 +46,9 @@ a:hover { text-decoration: underline; }
 .navbar-top {
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 16px;
   height: 60px;
-  gap: 14px;
+  gap: 12px;
 }
 .navbar-brand {
   display: flex;
@@ -72,9 +72,9 @@ a:hover { text-decoration: underline; }
 .navbar-links::-webkit-scrollbar { display: none; }   /* hide (Chrome/Safari) */
 .navbar-links a {
   color: rgba(255, 255, 255, 0.75);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 8px 13px;
+  padding: 7px 11px;
   border-radius: 6px;
   white-space: nowrap;              /* never wrap a label onto two lines */
   flex-shrink: 0;                   /* keep full size; the bar scrolls instead */
@@ -122,8 +122,10 @@ a:hover { text-decoration: underline; }
 .navbar-toggle:hover { background: rgba(255, 255, 255, 0.28); }
 
 /* Collapse the link bar into a toggle dropdown once the items would crowd the
-   row (super admins have the most items, so this triggers fairly wide). */
-@media (max-width: 1200px) {
+   row. Super Admins have 12 items, so we trigger fairly wide to avoid the last
+   item ever clipping against the user/logout block; below this it's a clean
+   vertical menu. */
+@media (max-width: 1600px) {
   .navbar-top { flex-wrap: wrap; height: auto; min-height: 60px; padding: 10px 18px; gap: 10px; }
   .navbar-brand { margin-right: auto; }
   .navbar-toggle { display: inline-block; order: 1; }
