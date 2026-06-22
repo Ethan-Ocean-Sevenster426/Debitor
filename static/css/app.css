@@ -46,9 +46,9 @@ a:hover { text-decoration: underline; }
 .navbar-top {
   display: flex;
   align-items: center;
-  padding: 0 30px;
+  padding: 0 20px;
   height: 60px;
-  gap: 18px;
+  gap: 14px;
 }
 .navbar-brand {
   display: flex;
@@ -57,21 +57,32 @@ a:hover { text-decoration: underline; }
   font-weight: 800;
   color: #fff;
   letter-spacing: 1px;
+  flex-shrink: 0;
 }
 .navbar-brand:hover { text-decoration: none; }
 .navbar-logo { height: 38px; width: auto; margin-right: 10px; }
-.navbar-links { display: flex; gap: 4px; flex: 1; }
+.navbar-links {
+  display: flex;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;            /* hide the scrollbar (Firefox) */
+}
+.navbar-links::-webkit-scrollbar { display: none; }   /* hide (Chrome/Safari) */
 .navbar-links a {
   color: rgba(255, 255, 255, 0.75);
   font-size: 14px;
   font-weight: 600;
-  padding: 8px 16px;
+  padding: 8px 13px;
   border-radius: 6px;
+  white-space: nowrap;              /* never wrap a label onto two lines */
+  flex-shrink: 0;                   /* keep full size; the bar scrolls instead */
   transition: background 0.2s, color 0.2s;
 }
 .navbar-links a:hover { background: rgba(255, 255, 255, 0.15); color: #fff; text-decoration: none; }
 .navbar-links a.active { background: rgba(255, 255, 255, 0.2); color: #fff; }
-.navbar-right { display: flex; align-items: center; gap: 12px; }
+.navbar-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .navbar-user { color: #fff; font-size: 13px; font-weight: 600; }
 .navbar-role {
   color: rgba(255, 255, 255, 0.7);
@@ -123,6 +134,7 @@ a:hover { text-decoration: underline; }
     flex-direction: column;
     gap: 2px;
     display: none;        /* hidden until the hamburger is tapped */
+    overflow-x: visible;  /* it's a vertical stack here, not a scroll strip */
     padding-bottom: 6px;
   }
   .navbar.open .navbar-links { display: flex; }
