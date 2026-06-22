@@ -33,7 +33,8 @@ from .models import (XeroConnection, OpenInvoiceSnapshot, SyncRun, SyncSchedule,
                      DEFAULT_WA_TEMPLATE, DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY)
 from . import legal_workflow
 from .xero_client import (fetch_invoice_history, fetch_contact, clean_contact,
-                          fetch_online_invoice_url, pacer, XeroDailyLimitError)
+                          fetch_online_invoice_url, pacer, XeroDailyLimitError,
+                          _refresh_access_token)
 from . import outreach
 from . import reports
 from . import notifications
@@ -163,27 +164,26 @@ def xero_callback(request):
 
 
 def _refresh_token_if_needed(request):
-    """Refresh the access token using the refresh token."""
-    refresh_token = request.session.get("xero_refresh_token")
-    if not refresh_token:
+    """Refresh the Xero access token via the persisted DB connection, then mirror
+    the result into the session.
+
+    The DB ``XeroConnection`` row is the single source of truth for the rotating
+    refresh token (the background sync refreshes the same row), so refreshing here
+    instead of from the session avoids two divergent token chains invalidating each
+    other. Returns True on success.
+    """
+    conn = XeroConnection.objects.order_by("id").first()
+    if not conn or not conn.refresh_token:
         return False
-
-    token_response = requests.post(
-        XERO_TOKEN_URL,
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        },
-        auth=(XERO_CLIENT_ID, XERO_CLIENT_SECRET),
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-
-    if token_response.status_code == 200:
-        tokens = token_response.json()
-        request.session["xero_access_token"] = tokens["access_token"]
-        request.session["xero_refresh_token"] = tokens.get("refresh_token", refresh_token)
-        return True
-    return False
+    try:
+        token = _refresh_access_token(conn)
+    except Exception:
+        return False
+    request.session["xero_access_token"] = token
+    request.session["xero_refresh_token"] = conn.refresh_token
+    request.session["xero_tenant_id"] = conn.tenant_id
+    request.session["xero_tenant_name"] = conn.tenant_name
+    return True
 
 
 LAST_XERO_ERROR = {}

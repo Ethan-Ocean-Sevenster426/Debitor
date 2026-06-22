@@ -72,6 +72,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Mirror the persisted Xero connection into each logged-in session so users
+    # never have to re-"Connect to Xero" after logout / token expiry.
+    'xero_app.middleware.XeroConnectionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
