@@ -2182,10 +2182,15 @@ def xero_debtor_statement(request):
 @require_POST
 def xero_allocate_debtor(request):
     """Allocate (or unallocate) a debtor to an administrator for follow-up."""
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     tenant_id = _current_tenant_id(request)
     if not tenant_id:
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": "Not connected to Xero."}, status=403)
         return redirect("xero_login")
     if not _can_allocate(request.user):
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": "You don't have permission to allocate debtors."}, status=403)
         messages.error(request, "You don't have permission to allocate debtors.")
         return redirect(request.POST.get("next") or "xero_aging_report")
 
@@ -2193,6 +2198,7 @@ def xero_allocate_debtor(request):
     contact_name = (request.POST.get("contact_name") or "").strip()
     admin_id = (request.POST.get("administrator") or "").strip()
 
+    allocated_name = ""
     if contact_id:
         if admin_id:
             admin = _assignable_admins().filter(id=admin_id).first()
@@ -2202,10 +2208,16 @@ def xero_allocate_debtor(request):
                     defaults={"contact_name": contact_name, "administrator": admin,
                               "assigned_by": request.user.email},
                 )
-                messages.success(request, f"{contact_name or contact_id} allocated to {admin.get_full_name() or admin.email}.")
+                allocated_name = admin.get_full_name() or admin.email
+                if not is_ajax:
+                    messages.success(request, f"{contact_name or contact_id} allocated to {allocated_name}.")
         else:
             DebtorAllocation.objects.filter(tenant_id=tenant_id, contact_id=contact_id).delete()
-            messages.success(request, f"{contact_name or contact_id} unallocated.")
+            if not is_ajax:
+                messages.success(request, f"{contact_name or contact_id} unallocated.")
+
+    if is_ajax:
+        return JsonResponse({"ok": True, "allocated": bool(allocated_name), "name": allocated_name})
     return redirect(request.POST.get("next") or "xero_aging_report")
 
 
