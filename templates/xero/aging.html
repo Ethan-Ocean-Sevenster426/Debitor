@@ -202,6 +202,33 @@
     .cd-label { width: 130px; flex: none; color: var(--text-muted); font-weight: 600; }
     .cd-val { color: var(--text-dark); }
     .cd-hr { border: none; border-top: 1px dashed #e5e7eb; margin: 6px 0; }
+
+    /* ---------- Responsive: fit the wide debtors table on laptops & small screens ---------- */
+    .aging-table-wrap { width: 100%; }
+    /* Compact the table progressively so it fits common laptop widths without scrolling. */
+    @media (max-width: 1440px) {
+        .data-table { font-size: 13px; }
+        .data-table th, .data-table td { padding: 8px 9px; }
+        .data-table td.status-cell { width: 168px; }
+    }
+    @media (max-width: 1200px) {
+        .data-table { font-size: 12.5px; }
+        .data-table th, .data-table td { padding: 7px 7px; }
+        .data-table td.status-cell { width: auto; }
+        .summary { grid-template-columns: repeat(4, 1fr); }
+        .debtor-search { flex-wrap: wrap; }
+    }
+    /* Below ~1100px the columns can't shrink further, so let the table scroll
+       sideways inside its own box rather than stretching the whole page. (Only
+       here — at wider widths overflow stays visible so in-table popups aren't clipped.) */
+    @media (max-width: 1100px) {
+        .aging-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .data-table { min-width: 880px; }
+    }
+    @media (max-width: 720px) {
+        .summary { grid-template-columns: repeat(2, 1fr); }
+        .page-title { font-size: 20px; }
+    }
 </style>{% endblock %}
 
 {% block extra_body %}
@@ -757,6 +784,7 @@ document.addEventListener('click', function (e) {
     </div>
 
     {% if debtors %}
+    <div class="aging-table-wrap">
     <table class="data-table">
         <thead>
             <tr>
@@ -861,6 +889,7 @@ document.addEventListener('click', function (e) {
             </tr>
         </tbody>
     </table>
+    </div>
     {% elif handover_page %}
     <p class="muted">No invoices on the handover page{% if selected_bucket %} in this bucket{% endif %}. Invoices over 65 days past due appear here automatically (unless their client has been excluded), or an administrator can mark a specific invoice for handover from the Debtors Action page.</p>
     {% elif write_off_page %}
