@@ -148,6 +148,12 @@
     .inv-actions form { margin: 0; display: inline-flex; }
     .inv-actions .call-now-btn, .inv-actions .wa-btn, .inv-actions .email-btn,
     .inv-actions .called-tag, .inv-actions .tpl-box { margin-left: 0; }
+    /* On smaller screens lay the follow-up buttons out as a compact 2-column grid. */
+    @media (max-width: 1280px) {
+        .inv-actions { display: grid; grid-template-columns: max-content max-content;
+                       justify-content: start; justify-items: start; align-items: center; gap: 5px 6px; }
+        .inv-actions form { width: auto; }
+    }
     .missed-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #991b1b; border: 1px solid #f3c2c7; }
     .missed-badge.sm { padding: 0 6px; }
     .debtor-search { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
