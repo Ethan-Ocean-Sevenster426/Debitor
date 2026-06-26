@@ -143,8 +143,7 @@ current_full_path.
                 </form>
                 {% elif inv.called_recently %}<span class="called-tag" title="Call logged in the last 7 days">&#10003; called <a href="#" class="undo-link" title="Undo &mdash; remove this call mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'call', this);">&#10005;</a></span>{% endif %}
 
-                {# WhatsApp is available on every invoice with a number on file (not only in
-                   the call window): recently sent -> tick + undo, otherwise a send button. #}
+                {# WhatsApp shows on every invoice with a number (any cadence): recently sent -> tick, else send button. #}
                 {% if inv.whatsapped_recently %}<span class="called-tag" title="WhatsApp logged in the last 7 days">&#10003; WhatsApp <a href="#" class="undo-link" title="Undo &mdash; remove this WhatsApp mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'whatsapp', this);">&#10005;</a></span>
                 {% elif inv.wa_options %}
                     {% if inv.wa_options|length > 1 %}
