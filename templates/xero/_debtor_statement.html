@@ -126,8 +126,7 @@ current_full_path.
                 {% if inv.missed_whatsapp %}<span class="missed-badge sm" title="No WhatsApp logged within the timeframe">&#9888; Missed WhatsApp</span>{% endif %}
                 {% if inv.missed_email %}<span class="missed-badge sm" title="No email logged within the timeframe">&#9888; Missed email</span>{% endif %}
 
-                {# Follow-up buttons grouped into a flex cluster so they wrap as a tidy
-                   unit under the bucket tag instead of breaking mid-row. #}
+                {# Follow-up buttons grouped into a flex cluster so they wrap tidily under the bucket tag. #}
                 {% if inv.needs_call or inv.called_recently or inv.needs_whatsapp or inv.whatsapped_recently or inv.needs_email or inv.emailed_recently %}
                 <div class="inv-actions">
                 {# Call: outstanding -> button; done in last 7 days -> tick + undo. #}
