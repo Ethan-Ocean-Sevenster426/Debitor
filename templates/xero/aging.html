@@ -141,7 +141,13 @@
     .wo-card textarea { width: 100%; min-height: 100px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit; font-size: 13px; resize: vertical; }
     .wo-card .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
     .wo-card .err { color: var(--brand-red); font-size: 12px; min-height: 16px; margin-top: 4px; }
-    .called-tag { margin-left: 6px; font-size: 11px; color: #16a34a; font-weight: 600; }
+    .called-tag { margin-left: 6px; font-size: 11px; color: #16a34a; font-weight: 600; white-space: nowrap; }
+    /* Group an invoice's follow-up buttons so they wrap as a tidy cluster under the
+       bucket tag, with even spacing, instead of breaking unevenly mid-row. */
+    .inv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; }
+    .inv-actions form { margin: 0; display: inline-flex; }
+    .inv-actions .call-now-btn, .inv-actions .wa-btn, .inv-actions .email-btn,
+    .inv-actions .called-tag, .inv-actions .tpl-box { margin-left: 0; }
     .missed-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fee2e2; color: #991b1b; border: 1px solid #f3c2c7; }
     .missed-badge.sm { padding: 0 6px; }
     .debtor-search { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }

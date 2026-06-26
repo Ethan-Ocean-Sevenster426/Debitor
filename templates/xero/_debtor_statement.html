@@ -126,6 +126,10 @@ current_full_path.
                 {% if inv.missed_whatsapp %}<span class="missed-badge sm" title="No WhatsApp logged within the timeframe">&#9888; Missed WhatsApp</span>{% endif %}
                 {% if inv.missed_email %}<span class="missed-badge sm" title="No email logged within the timeframe">&#9888; Missed email</span>{% endif %}
 
+                {# Follow-up buttons grouped into a flex cluster so they wrap as a tidy
+                   unit under the bucket tag instead of breaking mid-row. #}
+                {% if inv.needs_call or inv.called_recently or inv.needs_whatsapp or inv.whatsapped_recently or inv.needs_email or inv.emailed_recently %}
+                <div class="inv-actions">
                 {# Call: outstanding -> button; done in last 7 days -> tick + undo. #}
                 {% if inv.needs_call %}
                 <form method="post" action="{% url 'xero_log_call' %}" class="js-call-form" style="display:inline;"
@@ -178,7 +182,9 @@ current_full_path.
                     {% else %}
                     <span class="email-btn disabled" title="No email address on file for this debtor">&#9993; No email</span>
                     {% endif %}
-                {% elif inv.emailed_recently %}<span class="called-tag" title="Email logged in the last 7 days">&#10003; emailed <a href="#" class="undo-link" title="Undo &mdash; remove this email mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'email', this);">&#10005;</a></span>{% endif %}</td>
+                {% elif inv.emailed_recently %}<span class="called-tag" title="Email logged in the last 7 days">&#10003; emailed <a href="#" class="undo-link" title="Undo &mdash; remove this email mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'email', this);">&#10005;</a></span>{% endif %}
+                </div>
+                {% endif %}</td>
             <td>{{ inv.project_code|default:"&mdash;" }}</td>
             <td>{{ inv.status }}</td>
             <td class="num">R&nbsp;{{ inv.total|floatformat:2|intcomma }}</td>
