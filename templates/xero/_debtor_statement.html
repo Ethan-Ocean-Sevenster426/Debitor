@@ -127,7 +127,7 @@ current_full_path.
                 {% if inv.missed_email %}<span class="missed-badge sm" title="No email logged within the timeframe">&#9888; Missed email</span>{% endif %}
 
                 {# Follow-up buttons grouped into a flex cluster so they wrap tidily under the bucket tag. #}
-                {% if inv.needs_call or inv.called_recently or inv.needs_whatsapp or inv.whatsapped_recently or inv.needs_email or inv.emailed_recently %}
+                {% if inv.needs_call or inv.called_recently or inv.wa_options or inv.whatsapped_recently or inv.needs_email or inv.emailed_recently %}
                 <div class="inv-actions">
                 {# Call: outstanding -> button; done in last 7 days -> tick + undo. #}
                 {% if inv.needs_call %}
@@ -143,8 +143,10 @@ current_full_path.
                 </form>
                 {% elif inv.called_recently %}<span class="called-tag" title="Call logged in the last 7 days">&#10003; called <a href="#" class="undo-link" title="Undo &mdash; remove this call mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'call', this);">&#10005;</a></span>{% endif %}
 
-                {# WhatsApp: one template -> direct send; several -> popup to pick. #}
-                {% if inv.needs_whatsapp %}
+                {# WhatsApp is available on every invoice with a number on file (not only in
+                   the call window): recently sent -> tick + undo, otherwise a send button. #}
+                {% if inv.whatsapped_recently %}<span class="called-tag" title="WhatsApp logged in the last 7 days">&#10003; WhatsApp <a href="#" class="undo-link" title="Undo &mdash; remove this WhatsApp mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'whatsapp', this);">&#10005;</a></span>
+                {% elif inv.wa_options %}
                     {% if inv.wa_options|length > 1 %}
                     <span class="tpl-box">
                         <button type="button" class="wa-btn" onclick="event.stopPropagation(); toggleTplPop(this);" title="Choose a WhatsApp template to send">&#128241; WhatsApp &#9662;</button>
@@ -155,12 +157,12 @@ current_full_path.
                             {% endfor %}
                         </div>
                     </span>
-                    {% elif inv.wa_options %}
+                    {% else %}
                     <a class="wa-btn" href="{{ inv.wa_default_url }}" target="_blank" rel="noopener"
                        onclick="event.stopPropagation(); logWhatsApp('{{ inv.invoice_id }}', '{{ d.whatsapp_number }}', this);"
                        title="Send the customer a WhatsApp reminder &mdash; marks WhatsApp as actioned for 7 days">&#128241; WhatsApp</a>
                     {% endif %}
-                {% elif inv.whatsapped_recently %}<span class="called-tag" title="WhatsApp logged in the last 7 days">&#10003; WhatsApp <a href="#" class="undo-link" title="Undo &mdash; remove this WhatsApp mark" onclick="event.preventDefault(); event.stopPropagation(); unlogContact('{{ inv.invoice_id }}', 'whatsapp', this);">&#10005;</a></span>{% endif %}
+                {% endif %}
 
                 {# Email: one template -> direct send; several -> popup to pick. #}
                 {% if inv.needs_email %}
