@@ -2122,9 +2122,32 @@ def xero_debtor_statement(request):
     # Best mobile (or fallback) phone for the WhatsApp button. Reads only from
     # the local cache — no Xero call here, so this is fast and works even when
     # the daily API limit is exhausted.
+    cid_for_contact = contact_id or cid
     cached_contact = ContactDetail.objects.filter(
-        tenant_id=tenant_id, contact_id=contact_id or cid).first()
+        tenant_id=tenant_id, contact_id=cid_for_contact).first()
     cached_data = json.loads(cached_contact.data_json or "{}") if cached_contact else {}
+
+    # Contact enrichment in the sync is budget-capped and runs after invoice
+    # history, so on a large book a debtor's ContactDetail can be missing — which
+    # would leave the WhatsApp/Email buttons disabled even though Xero has the
+    # email/phone (the contact-details panel shows it because it fetches live).
+    # On a *true* cache miss, fetch the contact once here (the same call the panel
+    # makes) and cache it, so the buttons reflect Xero. Cached-but-email-less
+    # contacts are left alone, so we never refetch a contact that simply has none.
+    if cached_contact is None and cid_for_contact:
+        conn = XeroConnection.objects.filter(tenant_id=tenant_id).first()
+        if conn:
+            try:
+                raw = fetch_contact(conn, cid_for_contact)
+            except Exception:
+                raw = None  # daily limit / transient error — fall back to no detail
+            if raw:
+                cached_data = clean_contact(raw)
+                ContactDetail.objects.update_or_create(
+                    tenant_id=tenant_id, contact_id=cid_for_contact,
+                    defaults={"data_json": json.dumps(cached_data)},
+                )
+
     whatsapp_number = _pick_whatsapp_number(cached_data)
     email_address = _pick_email(cached_data, fallback=contact_email)
 
@@ -2746,11 +2769,11 @@ def _ensure_one_default(channel):
             t.save(update_fields=["is_default"])
 
 
-@role_required('administrator')
+@super_admin_required
 def xero_communication_setup(request):
     """Manage the email & WhatsApp reminder templates (multiple per channel, one
     default each) offered as a dropdown next to the per-invoice Email / WhatsApp
-    buttons. Super admins and administrators."""
+    buttons. Super admins only."""
     if request.method == "POST":
         action = (request.POST.get("action") or "").strip()
         channel = (request.POST.get("channel") or "").strip()

@@ -33,7 +33,7 @@
                 {% if user.is_super_admin or user.is_lawyer %}
                 <a href="{% url 'xero_filing' %}" class="{% if 'filing' in request.resolver_match.url_name %}active{% endif %}">Filing</a>
                 {% endif %}
-                {% if user.is_super_admin or user.is_administrator %}
+                {% if user.is_super_admin %}
                 <a href="{% url 'xero_communication_setup' %}" class="{% if request.resolver_match.url_name == 'xero_communication_setup' %}active{% endif %}">Communication Setup</a>
                 {% endif %}
                 {% if user.is_super_admin %}

@@ -815,12 +815,13 @@ document.addEventListener('click', function (e) {
                         <input type="hidden" name="contact_name" value="{{ d.name }}">
                         <button type="submit" class="debtor-action-btn reopen">&#8634; Reopen</button>
                     </form>
-                    {% elif can_manage and not write_off_page and not handover_page and not closed_page %}
+                    {% elif can_manage and not write_off_page and not closed_page %}
                     <form method="post" action="{% url 'xero_close_debtor' %}" class="debtor-action" onclick="event.stopPropagation();"
                           onsubmit="return confirm('Mark {{ d.name|escapejs }} as closed? They will move to the Closed Debtors page.');">
                         {% csrf_token %}
                         <input type="hidden" name="contact_id" value="{{ d.cid }}">
                         <input type="hidden" name="contact_name" value="{{ d.name }}">
+                        <input type="hidden" name="next" value="{{ current_full_path }}">
                         <button type="submit" class="debtor-action-btn close">&#10005; Mark closed</button>
                     </form>
                     {% endif %}
