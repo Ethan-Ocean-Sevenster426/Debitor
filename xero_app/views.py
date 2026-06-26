@@ -843,9 +843,15 @@ def _aging_context(request, tenant_id, closed_only, write_off_only=False, handov
     # everything, but may drill into one administrator's book via ?admin=<id>.
     # Lawyers on the Handover page see all activated invoices, unrestricted by allocation.
     view_admin = None
+    unallocated_only = False
     if request.user.is_super_admin or (is_lawyer and handover_only):
         admin_param = (request.GET.get("admin") or "").strip()
-        if admin_param.isdigit() and request.user.is_super_admin:
+        if admin_param == "unallocated" and request.user.is_super_admin:
+            # Show only debtors not allocated to any administrator.
+            unallocated_only = True
+            restrict_ids = None
+            restrict_to_me = False
+        elif admin_param.isdigit() and request.user.is_super_admin:
             restrict_ids = {cid for cid, a in alloc_map.items() if a.id == int(admin_param)}
             restrict_to_me = True
             view_admin = next((a for cid, a in alloc_map.items() if a.id == int(admin_param)), None)
@@ -912,6 +918,9 @@ def _aging_context(request, tenant_id, closed_only, write_off_only=False, handov
 
         # Allocation-based visibility for non-super-admins.
         if restrict_to_me and cid not in my_alloc_ids:
+            continue
+        # "Unallocated" filter (super admins): keep only debtors with no admin.
+        if unallocated_only and cid in alloc_map:
             continue
 
         # Scorecard stage filter (from the dashboard) and debtor/invoice search.
@@ -1075,6 +1084,7 @@ def _aging_context(request, tenant_id, closed_only, write_off_only=False, handov
         "qs_no_project": urlencode([(k, v) for k, vs in request.GET.lists() if k != "project" for v in vs]),
         "view_admin_id": (request.GET.get("admin") or "").strip() if request.user.is_super_admin else "",
         "view_admin_label": view_admin_label,
+        "unallocated_only": unallocated_only,
         "admins": list(_assignable_admins()) if request.user.is_super_admin else [],
         "search": search,
         "as_of": date.today().isoformat(),

@@ -653,6 +653,13 @@ document.addEventListener('click', function (e) {
     </div>
     {% endif %}
 
+    {% if unallocated_only %}
+    <div class="alert alert-info" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Viewing <strong>unallocated</strong> debtors &mdash; not yet assigned to an administrator.</span>
+        <a href="{{ request.path }}">Show all debtors</a>
+    </div>
+    {% endif %}
+
     <div class="databox">
         <strong>Data window:</strong>
         {% if earliest_invoice_date %}
@@ -673,7 +680,16 @@ document.addEventListener('click', function (e) {
             {% for a in admins %}
             <option value="{{ a.id }}"{% if view_admin_id == a.id|stringformat:'s' %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>
             {% endfor %}
+            {% if user.is_super_admin %}<option value="unallocated"{% if unallocated_only %} selected{% endif %}>&mdash; Unallocated &mdash;</option>{% endif %}
         </select>
+        {% if user.is_super_admin %}
+        {# Quick toggle: show only debtors not yet allocated to any administrator. #}
+        <button type="submit" name="admin" value="{% if unallocated_only %}{% else %}unallocated{% endif %}"
+                class="btn btn-sm {% if unallocated_only %}btn-primary{% else %}btn-secondary{% endif %}"
+                title="Show only debtors not yet allocated to an administrator">
+            {% if unallocated_only %}&#10003; Unallocated only{% else %}Show unallocated{% endif %}
+        </button>
+        {% endif %}
         {% endif %}
         {% if available_projects %}
         <div class="proj-filter" style="position:relative; display:inline-block;">
