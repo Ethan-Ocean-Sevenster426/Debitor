@@ -203,10 +203,14 @@
     .cd-val { color: var(--text-dark); }
     .cd-hr { border: none; border-top: 1px dashed #e5e7eb; margin: 6px 0; }
 
-    /* ---------- Responsive: fit the wide debtors + statement tables on laptops & small screens ---------- */
-    .aging-table-wrap { width: 100%; }
+    /* ---------- Responsive: fit the wide debtors + statement tables on every screen ---------- */
+    /* The table (and the invoice statement nested inside it) always scrolls
+       horizontally inside its own box, so the page itself never scrolls sideways
+       on any screen width. A min-width keeps columns readable while scrolling. */
+    .aging-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .aging-table-wrap > .data-table { min-width: 900px; }
     /* Compact both the debtor table and the expanded invoice statement progressively
-       so they fit common laptop widths without scrolling. */
+       so they need less (often no) sideways scroll on smaller laptops. */
     @media (max-width: 1440px) {
         .data-table, .statement { font-size: 13px; }
         .data-table th, .data-table td,
@@ -220,13 +224,6 @@
         .data-table td.status-cell { width: auto; }
         .summary { grid-template-columns: repeat(4, 1fr); }
         .debtor-search { flex-wrap: wrap; }
-    }
-    /* At/under ~1366px the columns can't shrink further, so let the table scroll
-       sideways inside its own box rather than pushing the whole page wide. Above
-       this width overflow stays visible so the in-table popups aren't clipped. */
-    @media (max-width: 1366px) {
-        .aging-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .data-table { min-width: 920px; }
     }
     @media (max-width: 720px) {
         .summary { grid-template-columns: repeat(2, 1fr); }
