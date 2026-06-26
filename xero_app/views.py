@@ -719,10 +719,10 @@ def _ordered_templates(channel):
 
 def _whatsapp_options(templates, number, fields):
     """Build [{id,label,url}] wa.me links — one per template — for an invoice.
-    Empty when there's no number. Falls back to the built-in default wording when
-    no templates exist for the channel."""
-    if not number:
-        return []
+    When no number is on file we still return links: a number-less wa.me URL opens
+    WhatsApp with the message pre-filled for the user to pick the recipient, so
+    every invoice has a working WhatsApp action. Falls back to the built-in default
+    wording when no templates exist for the channel."""
     out = []
     for t in templates:
         text = _render_wa_message(t.body or DEFAULT_WA_TEMPLATE, **fields)
@@ -1029,14 +1029,11 @@ def _aging_context(request, tenant_id, closed_only, write_off_only=False, handov
         d["legal_id"] = lm.id if lm else None
         # Collapse the per-channel missed / due flags into one compact label each
         # so the Status column stays narrow.
-        # WhatsApp only counts as due/missed when the debtor actually has a number
-        # on file — otherwise the badge would promise a channel that can't be used.
-        has_wa = bool(d["whatsapp_number"])
         d["missed_labels"] = [lbl for lbl, on in (
-            ("Call", d["missed_call"]), ("WhatsApp", d["missed_whatsapp"] and has_wa), ("Email", d["missed_email"]))
+            ("Call", d["missed_call"]), ("WhatsApp", d["missed_whatsapp"]), ("Email", d["missed_email"]))
             if on]
         d["due_labels"] = [lbl for lbl, on in (
-            ("Call", d["needs_call"]), ("WhatsApp", d["needs_whatsapp"] and has_wa), ("Email", d["needs_email"]))
+            ("Call", d["needs_call"]), ("WhatsApp", d["needs_whatsapp"]), ("Email", d["needs_email"]))
             if on]
         d["project_code"] = ", ".join(sorted(d["project_codes"]))
         d["bucket_list"] = [
