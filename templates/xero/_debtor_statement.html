@@ -161,7 +161,7 @@ current_full_path.
                        onclick="event.stopPropagation(); logWhatsApp('{{ inv.invoice_id }}', '{{ d.whatsapp_number }}', this);"
                        title="Send the customer a WhatsApp reminder &mdash; marks WhatsApp as actioned for 7 days">&#128241; WhatsApp</a>
                     {% endif %}
-                {% endif %}
+                {% else %}<span class="wa-btn disabled" title="No WhatsApp number on file for this debtor in Xero">&#128241; No number</span>{% endif %}
 
                 {# Email: one template -> direct send; several -> popup to pick. #}
                 {% if inv.needs_email %}
